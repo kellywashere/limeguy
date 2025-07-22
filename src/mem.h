@@ -1,0 +1,36 @@
+#ifndef __MEM_H__
+#define __MEM_H__
+
+#include "typedefs.h"
+#include "rom.h"
+
+// mem takes care of memory mapping
+
+struct mem {
+	struct rom* rom;
+	i8*         ram;
+	i8          oam[0xA0];
+	i8          io[0x80];
+	i8          hiram[0x7F];
+	i8          ie; // IE interrupt enbl flags. Note: IF is at io[0x0F]
+};
+
+struct mem* mem_create();
+void mem_destroy(struct mem* mem);
+
+void mem_connect_rom(struct mem* mem, struct rom* rom);
+void mem_disconnect_rom(struct mem* mem);
+
+i8 mem_read(struct mem* mem, u16 addr);
+u16 mem_read16(struct mem* mem, u16 addr);
+
+void mem_write(struct mem* mem, u16 addr, i8 value);
+void mem_write16(struct mem* mem, u16 addr, u16 value);
+
+i8 mem_get_active_interrupts(struct mem* mem);
+void mem_clear_interrupt_flag(struct mem* mem, int nr);
+
+void mem_divtimer_inc(struct mem* mem);
+void mem_tima_inc(struct mem* mem);
+
+#endif

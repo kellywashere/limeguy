@@ -1,0 +1,11 @@
+.cache/
+bin/
+obj/
+roms/
+log/
+gameboy-doctor/
+limeguy
+compile_commands.json
+*.gb
+*.log
+

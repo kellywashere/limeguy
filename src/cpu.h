@@ -1,0 +1,66 @@
+#ifndef __CPU_H__
+#define __CPU_H__
+
+#include <stdbool.h>
+
+#include "mem.h"
+#include "typedefs.h"
+
+#define NR_REGS 7
+
+enum op_type {
+	// REG_A .. REG_L also used as indices in regs[]
+	REG_A = 0, REG_B, REG_C, REG_D, REG_E, REG_H, REG_L,
+	// 16 bit regs
+	REG_BC, REG_DE, REG_HL, REG_AF, REG_SP,
+	// 16 bit [regs]
+	MEM_BC, MEM_DE, MEM_HL, MEM_HLI, MEM_HLD,
+	// Immediate
+	IMM8, IMM16, MEM_IMM8, MEM_IMM16, MEM16B_IMM16, SP_IMM8,
+	// Misc
+	MEM_C,
+	// Conditions
+	COND_NZ, COND_Z, COND_NC, COND_C, COND_NIL,
+	// Literal values (e.g. RST, SET, etc.)
+	LIT0, LIT1, LIT2, LIT3, LIT4, LIT5, LIT6, LIT7,
+
+	NIL       // no operand
+};
+
+struct flags {
+	bool Z; // zero
+	bool N; // sub flag (BCD)
+	bool H; // half-carry (BCD)
+	bool C; // carry
+};
+
+struct cpu {
+	// registers & flags
+	i8           regs[NR_REGS];
+	u16          SP;
+	u16          PC;
+	struct flags flags;
+
+	bool         ime; // interrupt master enbl
+	bool         ei_initiated; // helper for instruction delay of EI
+
+	unsigned int cycles_left; // to keep track of instr cycles
+
+	struct mem*  mem;
+
+	bool halted;
+	bool haltbug;
+
+	// TODO: stop/crash state
+	// TODO: interrupt flag, and instruction delay counter
+};
+
+struct cpu* cpu_create(struct mem* mem);
+void cpu_destroy(struct cpu* cpu);
+
+void cpu_clock_cycle(struct cpu* cpu);
+
+void cpu_print_info(struct cpu* cpu);
+void cpu_print_instr_at_pc(struct cpu* cpu);
+
+#endif
