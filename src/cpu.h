@@ -1,6 +1,7 @@
 #ifndef __CPU_H__
 #define __CPU_H__
 
+#include <stdio.h>
 #include <stdbool.h>
 
 #include "mem.h"
@@ -51,16 +52,16 @@ struct cpu {
 	bool halted;
 	bool haltbug;
 
-	// TODO: stop/crash state
-	// TODO: interrupt flag, and instruction delay counter
+	bool stopped;
 };
 
 struct cpu* cpu_create(struct mem* mem);
 void cpu_destroy(struct cpu* cpu);
 
 void cpu_clock_cycle(struct cpu* cpu);
+bool cpu_is_stopped(struct cpu* cpu);
 
 void cpu_print_info(struct cpu* cpu);
-void cpu_print_instr_at_pc(struct cpu* cpu);
+void cpu_fprint_instr_at_pc(struct cpu* cpu, FILE* stream);
 
 #endif

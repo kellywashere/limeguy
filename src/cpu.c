@@ -41,6 +41,7 @@ void cpu_init(struct cpu* cpu) {
 	cpu->cycles_left = 0;
 	cpu->halted = false;
 	cpu->haltbug = false;
+	cpu->stopped = false;
 }
 
 struct cpu* cpu_create(struct mem* mem) {
@@ -52,6 +53,10 @@ struct cpu* cpu_create(struct mem* mem) {
 
 void cpu_destroy(struct cpu* cpu) {
 	free(cpu);
+}
+
+bool cpu_is_stopped(struct cpu* cpu) {
+	return cpu->stopped;
 }
 
 static struct instruction opcode_lookup[512];   // contains instruction info includinng jump table; initialized later
@@ -217,6 +222,9 @@ void cpu_do_interrupt(struct cpu* cpu, int nr) {
 }
 
 void cpu_clock_cycle(struct cpu* cpu) { // process 1 M-cycle
+	if (cpu->stopped)
+		return; // TODO: 
+
 	if (cpu->cycles_left) {
 		--cpu->cycles_left;
 		return;
@@ -259,88 +267,87 @@ void cpu_clock_cycle(struct cpu* cpu) { // process 1 M-cycle
 }
 
 static
-void cpu_print_operand(struct cpu* cpu, enum op_type tp) {
-	//printf("(optype=%u)", tp);
+void cpu_fprint_operand(struct cpu* cpu, enum op_type tp, FILE* stream) {
 	char* regnames8 = "ABCDEHL";
 	if (tp == NIL || tp == COND_NIL)
 		return;
 	if (tp <= REG_L)
-		printf("%c", regnames8[tp]);
+		fprintf(stream,"%c", regnames8[tp]);
 	else if (tp <= REG_HL) {
 		int idx = (tp - REG_BC) * 2 + REG_B;
-		printf("%c%c", regnames8[idx], regnames8[idx + 1]);
+		fprintf(stream,"%c%c", regnames8[idx], regnames8[idx + 1]);
 	}
 	else if (tp == REG_AF)
-		printf("AF");
+		fprintf(stream,"AF");
 	else if (tp == REG_SP)
-		printf("SP");
+		fprintf(stream,"SP");
 	else if (tp <= MEM_HL) {
 		int idx = (tp - MEM_BC) * 2 + REG_B;
-		printf("[%c%c]", regnames8[idx], regnames8[idx + 1]);
+		fprintf(stream,"[%c%c]", regnames8[idx], regnames8[idx + 1]);
 	}
 	else if (tp <= MEM_HLD) {
-		printf("[HL%c]", tp == MEM_HLI ? '+' : '-');
+		fprintf(stream,"[HL%c]", tp == MEM_HLI ? '+' : '-');
 	}
 	else if (tp == IMM8) {
 		u16 val = mem_read(cpu->mem, cpu->PC++) & 0x0FF;
-		printf("$%02X", val);
+		fprintf(stream,"$%02X", val);
 	}
 	else if (tp == IMM16) {
 		u16 val = mem_read16(cpu->mem, cpu->PC);
 		cpu->PC += 2;
-		printf("$%04X", val);
+		fprintf(stream,"$%04X", val);
 	}
 	else if (tp == MEM_IMM8) {
 		u16 val = mem_read(cpu->mem, cpu->PC++) & 0x0FF;
-		printf("[$FF00 + $%02X]", val);
+		fprintf(stream,"[$FF00 + $%02X]", val);
 	}
 	else if (tp == MEM_IMM16) {
 		u16 addr = mem_read16(cpu->mem, cpu->PC);
 		cpu->PC += 2;
-		printf("[$%04X]", addr);
+		fprintf(stream,"[$%04X]", addr);
 	}
 	else if (tp == SP_IMM8) {
 		i8 offs = mem_read(cpu->mem, cpu->PC++);
 		if (offs >= 0)
-			printf("SP+%d", offs);
+			fprintf(stream,"SP+%d", offs);
 		else
-			printf("SP-%d", -offs);
+			fprintf(stream,"SP-%d", -offs);
 	}
 	else if (tp == MEM_C)
-		printf("[$FF00 + C]");
+		fprintf(stream,"[$FF00 + C]");
 	else if (tp == COND_NZ)
-		printf("NZ");
+		fprintf(stream,"NZ");
 	else if (tp == COND_Z)
-		printf("Z");
+		fprintf(stream,"Z");
 	else if (tp == COND_NC)
-		printf("NC");
+		fprintf(stream,"NC");
 	else if (tp == COND_C)
-		printf("C");
+		fprintf(stream,"C");
 	else if (tp >= LIT0 && tp <= LIT7)
-		printf("%d", tp - LIT0);
+		fprintf(stream,"%d", tp - LIT0);
 	else
 		fprintf(stderr, "cpu_print_operand: unreachable (tp = %d)\n", tp);
 }
 
-void cpu_print_instr_at_pc(struct cpu* cpu) {
+void cpu_fprint_instr_at_pc(struct cpu* cpu, FILE* stream) {
 	u16 pc = cpu->PC;
 	u16 opcode = mem_read(cpu->mem, cpu->PC++) & 0x0FF; // expand width
 	bool prefix = opcode == OPCODE_PREFIX;
 	if (prefix)
 		opcode = mem_read(cpu->mem, cpu->PC++) & 0x0FF; // prefix: read next opcode
 	struct instruction* instr = &opcode_lookup[opcode + (prefix ? 256 : 0)];
-	printf("%s ", instr->mnemonic);
+	fprintf(stream, "%s ", instr->mnemonic);
 	if (!strcmp(instr->mnemonic, "RST")) // RST does not use op_type like other instructions
-		printf("$%02X", 8 * (instr->op1 - LIT0));
+		fprintf(stream, "$%02X", 8 * (instr->op1 - LIT0));
 	else {
-		cpu_print_operand(cpu, instr->op1);
+		cpu_fprint_operand(cpu, instr->op1, stream);
 		if (instr->op2 != NIL) {
 			if (instr->op1 != COND_NIL)
-				printf(", ");
-			cpu_print_operand(cpu, instr->op2);
+				fprintf(stream, ", ");
+			cpu_fprint_operand(cpu, instr->op2, stream);
 		}
 	}
-	printf("\n");
+	fprintf(stream, "\n");
 	cpu->PC = pc;
 }
 
@@ -359,7 +366,7 @@ void cpu_print_info(struct cpu* cpu) {
 	*/
 	printf("\nSP: $%04X\n", cpu->SP);
 	printf("PC: $%04X ==> ", cpu->PC);
-	cpu_print_instr_at_pc(cpu);
+	cpu_fprint_instr_at_pc(cpu, stdout);
 	printf("Cycles left: %u\n", cpu->cycles_left);
 	// TODO: interrupt flag?
 }
@@ -724,7 +731,10 @@ static void SRL(struct cpu* cpu, struct instruction* instr) {
 	cpu->flags.H = false;
 }
 
-static void STOP(struct cpu* cpu, struct instruction* instr) {printf("%s not implemented yet\n", instr->mnemonic);}
+static void STOP(struct cpu* cpu, struct instruction* instr) {
+	printf("CPU: STOP instr at %04X\n", cpu->PC - 1);
+	cpu->stopped = true;
+}
 
 static void SUB(struct cpu* cpu, struct instruction* instr) {
 	i8 op = cpu_get_operand(cpu, instr->op2);

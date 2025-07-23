@@ -36,6 +36,11 @@
 #define INTR_SERIAL 3
 #define INTR_JOYPAD 4
 
+
+
+// DEBUG
+#define IO_UNUSED 0x03 /* if non-zero: breakpoint */
+
 struct io_init {
 	u16 offset;
 	u16 val;
@@ -49,9 +54,15 @@ struct mem* mem_create() {
 	mem->ram = malloc(32 * 1024);
 
 	// Init vals
+	// FF4D needs to return FF for cpu_instrs.gb to pass
+	for (int ii = 0; ii < IO_SIZE; ++ii)
+		mem->io[ii] = 0xFF; // see: https://www.reddit.com/r/EmuDev/comments/ipap0w/blarggs_cpu_tests_and_the_stop_instruction/
 	for (int ii = 0; ii < sizeof(io_init_dmg0) / sizeof(io_init_dmg0[0]); ++ii)
 		mem->io[io_init_dmg0[ii].offset] = io_init_dmg0[ii].val;
 	mem->ie = 0;
+
+	// DEBUG  TODO: Remove
+	mem->io[IO_UNUSED] = 0;
 
 	return mem;
 }
@@ -75,14 +86,8 @@ void mem_disconnect_rom(struct mem* mem) {
 i8 mem_read(struct mem* mem, u16 addr) {
 	if (addr >= ECHO_RAM && addr < ECHO_RAM + ECHO_RAM_SIZE)
 		addr -= ECHO_RAM_OFFS;
-	if (addr < VRAM) { // ROM bank 00 & 01. TODO: mappers
-		if (addr >= mem->rom->size) {
-			printf("WARNING: Reading outside of ROM (size: $%04X, addr: $%04X)\n",
-					mem->rom->size, addr);
-			return 0x66;
-		}
-		return mem->rom->data[addr];
-	}
+	if (addr < VRAM) // ROM bank 00 & 01
+		return rom_read(mem->rom, addr);
 	else if (addr >= VRAM && addr < ECHO_RAM)
 		return mem->ram[addr - VRAM]; // includes echo RAM
 	else if (addr >= HIRAM_START && addr < (HIRAM_START + HIRAM_SIZE))
@@ -93,7 +98,7 @@ i8 mem_read(struct mem* mem, u16 addr) {
 	else if (addr >= IO_START && addr < (IO_START + IO_SIZE)) { // IO operation
 		u16 io_idx = addr & 0xFF;
 	
-		// FIXME: this is a hack to further pass gb doctor
+		// FIXME: this is a hack to pass gb doctor
 		if (io_idx == 0x44) return 0x90;
 
 		return mem->io[io_idx]; // TODO
@@ -115,10 +120,8 @@ void mem_write(struct mem* mem, u16 addr, i8 value) {
 	u16 v = value & 0xFF; // unsigned value
 	if (addr >= ECHO_RAM && addr < ECHO_RAM + ECHO_RAM_SIZE)
 		addr -= ECHO_RAM_OFFS;
-	if (addr < VRAM) { // ROM bank 00 & 01. TODO: mappers
-		printf("WARNING: Writing to ROM (addr: $%04X)\n", addr);
-		// TODO
-	}
+	if (addr < VRAM) // ROM bank 00 & 01
+		rom_write(mem->rom, addr, value);
 	else if (addr >= VRAM && addr < ECHO_RAM)
 		mem->ram[addr - VRAM] = value; // includes echo RAM
 	else if (addr >= HIRAM_START && addr < (HIRAM_START + HIRAM_SIZE))
@@ -134,6 +137,11 @@ void mem_write(struct mem* mem, u16 addr, i8 value) {
 				if (v == 0x81) {
 					printf("%c", mem->io[IO_SB]);
 					mem->io[io_idx] = 0;
+					/*
+					//DEBUG TODO: Remove
+					if ((mem->io[IO_SB] & 0x0FF) == '3')
+						mem->io[IO_UNUSED] = 1; // break
+					*/
 				}
 				break;
 			case IO_DIV:
