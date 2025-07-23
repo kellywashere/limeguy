@@ -4,6 +4,10 @@
 #include "cpu.h"
 #include "mem.h"
 
+
+// TODO: Make clock.h/clock.c   CPU --> clock --> other peripherals
+#include "timers.h"
+
 #define OPCODE_PREFIX 0xCB
 
 static
@@ -29,13 +33,12 @@ void cpu_init(struct cpu* cpu) {
 	cpu->halted = false;
 	cpu->haltbug = false;
 	cpu->stopped = false;
-
-	cpu->prefix = false;
 }
 
-struct cpu* cpu_create(struct mem* mem) {
+struct cpu* cpu_create(struct mem* mem, struct timers* timers) {
 	struct cpu* cpu = malloc(sizeof(struct cpu));
 	cpu->mem = mem;
+	cpu->timers = timers;
 	cpu_init(cpu);
 	return cpu;
 }
@@ -46,6 +49,13 @@ void cpu_destroy(struct cpu* cpu) {
 
 bool cpu_is_stopped(struct cpu* cpu) {
 	return cpu->stopped;
+}
+
+static
+void cpu_cycle(struct cpu* cpu) {
+	cpu->cycles_left = cpu->cycles_left > 0 ? cpu->cycles_left - 1 : 0;
+	timers_clock(cpu->timers);
+	//clock_cycle(cpu->clock);
 }
 
 static struct instruction opcode_lookup[512];   // contains instruction info includinng jump table; initialized later
@@ -78,6 +88,23 @@ static
 int cpu_get_operand_size(struct cpu* cpu, enum op_type tp) {
 	return ((REG_BC <= tp && tp <= REG_SP) || tp == IMM16) ? 16 : 8;
 }
+
+/*
+static
+i8 cpu_memread_cycle(struct cpu* cpu, u16 addr) {
+	//cpu_cycle(cpu);
+	return mem_read(cpu->mem, addr);
+}
+
+static
+i8 cpu_memread16_cycle(struct cpu* cpu, u16 addr) {
+	//cpu_cycle(cpu);
+	i8 lsbyte = mem_read(cpu->mem, addr++);
+	//cpu_cycle(cpu);
+	i8 msbyte = mem_read(cpu->mem, addr);
+	return (((u16)msbyte) << 8) | ((u16)lsbyte & 0x0FF);
+}
+*/
 
 static
 int cpu_get_operand(struct cpu* cpu, enum op_type tp) {
@@ -220,7 +247,7 @@ void cpu_clock_cycle(struct cpu* cpu) { // process 1 M-cycle
 	}
 
 	// check interrupt
-	if (!cpu->prefix && (cpu->ime || cpu->halted)) {
+	if (cpu->ime || cpu->halted) {
 		u16 interrupts = mem_get_active_interrupts(cpu->mem);
 		for (int bitnr = 0; interrupts != 0 && bitnr <= 4; ++bitnr) {
 			if (interrupts & (1 << bitnr)) {
@@ -246,8 +273,13 @@ void cpu_clock_cycle(struct cpu* cpu) { // process 1 M-cycle
 	// halt bug:
 	cpu->PC = cpu->haltbug ? cpu->PC : cpu->PC + 1;
 	cpu->haltbug = false;
-	struct instruction* instr = &opcode_lookup[opcode + (cpu->prefix ? 256 : 0)];
-	cpu->prefix = false;
+
+	bool prefix = opcode == OPCODE_PREFIX;
+	if (prefix) {
+		cpu_cycle(cpu);
+		opcode = mem_read(cpu->mem, cpu->PC++) & 0x0FF; // prefix: read next opcode
+	}
+	struct instruction* instr = &opcode_lookup[opcode + (prefix ? 256 : 0)];
 	cpu->cycles_left = instr->cycles - 1; // -1 for this cycle itself
 	// For jumps/calls/rets, we correct in the instruction function when jump not taken
 
@@ -759,9 +791,7 @@ static void XOR(struct cpu* cpu, struct instruction* instr) {
 	cpu->flags.C = false;
 }
 
-static void PREFIX(struct cpu* cpu, struct instruction* instr) {
-	cpu->prefix = true;
-}
+static void PREFIX(struct cpu* cpu, struct instruction* instr) { }
 
 static void ILLEGAL(struct cpu* cpu, struct instruction* instr) {printf("%s not implemented yet\n", instr->mnemonic);}
 

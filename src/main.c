@@ -89,9 +89,8 @@ int main(int argc, char* argv[]) {
 	mem_connect_rom(mem, rom);
 	printf("Loaded ROM %s. Type: %02X\n", argv[argc-1], rom_get_type(rom));
 
-	struct cpu* cpu = cpu_create(mem);
 	struct timers* timers = timers_create(mem);
-
+	struct cpu* cpu = cpu_create(mem, timers);
 
 	bool break_hit = false;
 	bool done = false;

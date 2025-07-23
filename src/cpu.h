@@ -9,6 +9,8 @@
 
 #define NR_REGS 7
 
+
+// TODO: any way to simplify / generalize this mess?
 enum op_type {
 	// REG_A .. REG_L also used as indices in regs[]
 	REG_A = 0, REG_B, REG_C, REG_D, REG_E, REG_H, REG_L,
@@ -50,15 +52,12 @@ struct cpu {
 	unsigned int cycles_left; // to keep track of instr cycles
 
 	struct mem*  mem;
+	struct timers* timers;
 
 	bool halted;
 	bool haltbug;
 
 	bool stopped;
-
-	// for correct mem timing, we spread execution over cycles. Next fields are state for that
-	bool prefix; // true when prev opcode was prefix
-	struct instruction* cur_instr;
 };
 
 typedef void instr_fn(struct cpu* cpu, struct instruction* instr); // instruction function type
@@ -73,7 +72,7 @@ struct instruction {
 };
 
 
-struct cpu* cpu_create(struct mem* mem);
+struct cpu* cpu_create(struct mem* mem, struct timers* timers);
 void cpu_destroy(struct cpu* cpu);
 
 void cpu_clock_cycle(struct cpu* cpu);
