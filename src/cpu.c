@@ -16,7 +16,7 @@ struct instruction {
 	enum op_type op1;
 	enum op_type op2;
 	int          cycles;
-	int          cycles_alt;
+	int          cycles_alt; // for non-taken jumps/calls/rets
 };
 
 static
@@ -262,6 +262,8 @@ void cpu_clock_cycle(struct cpu* cpu) { // process 1 M-cycle
 		opcode = mem_read(cpu->mem, cpu->PC++) & 0x0FF; // prefix: read next opcode
 	struct instruction* instr = &opcode_lookup[opcode + (prefix ? 256 : 0)];
 	cpu->cycles_left = instr->cycles - 1; // -1 for this cycle itself
+	// For jumps/calls/rets, we correct in the instruction function when jump not taken
+
 	// call instr function from jump table
 	instr->func(cpu, instr);
 }
@@ -301,7 +303,7 @@ void cpu_fprint_operand(struct cpu* cpu, enum op_type tp, FILE* stream) {
 		u16 val = mem_read(cpu->mem, cpu->PC++) & 0x0FF;
 		fprintf(stream,"[$FF00 + $%02X]", val);
 	}
-	else if (tp == MEM_IMM16) {
+	else if (tp == MEM_IMM16 || tp == MEM16B_IMM16) {
 		u16 addr = mem_read16(cpu->mem, cpu->PC);
 		cpu->PC += 2;
 		fprintf(stream,"[$%04X]", addr);
@@ -432,6 +434,8 @@ static void CALL(struct cpu* cpu, struct instruction* instr) {
 		mem_write16(cpu->mem, cpu->SP, cpu->PC);
 		cpu->PC = addr;
 	}
+	else
+		cpu->cycles_left -= (instr->cycles - instr->cycles_alt);
 }
 
 static void CCF(struct cpu* cpu, struct instruction* instr) {
@@ -519,12 +523,14 @@ static void JP(struct cpu* cpu, struct instruction* instr) {
 	u16 addr = cpu_get_operand(cpu, instr->op2);
 	bool cond = cpu_check_cond(cpu, instr->op1);
 	cpu->PC = cond ? addr : cpu->PC;
+	cpu->cycles_left -= cond ? 0 : (instr->cycles - instr->cycles_alt);
 }
 
 static void JR(struct cpu* cpu, struct instruction* instr) {
 	i8 offs = cpu_get_operand(cpu, instr->op2);
 	bool cond = cpu_check_cond(cpu, instr->op1);
 	cpu->PC = cond ? cpu->PC + offs : cpu->PC;
+	cpu->cycles_left -= cond ? 0 : (instr->cycles - instr->cycles_alt);
 }
 
 static void LD(struct cpu* cpu, struct instruction* instr) {
@@ -582,6 +588,8 @@ static void RET(struct cpu* cpu, struct instruction* instr) {
 		cpu->PC = mem_read16(cpu->mem, cpu->SP);
 		cpu->SP += 2;
 	}
+	else
+		cpu->cycles_left -= (instr->cycles - instr->cycles_alt);
 }
 
 static void RETI(struct cpu* cpu, struct instruction* instr) {
