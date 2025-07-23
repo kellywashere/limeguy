@@ -35,6 +35,8 @@ struct flags {
 	bool C; // carry
 };
 
+struct instruction; // declare for next part
+
 struct cpu {
 	// registers & flags
 	i8           regs[NR_REGS];
@@ -53,7 +55,23 @@ struct cpu {
 	bool haltbug;
 
 	bool stopped;
+
+	// for correct mem timing, we spread execution over cycles. Next fields are state for that
+	bool prefix; // true when prev opcode was prefix
+	struct instruction* cur_instr;
 };
+
+typedef void instr_fn(struct cpu* cpu, struct instruction* instr); // instruction function type
+
+struct instruction {
+	char*        mnemonic;
+    instr_fn*    func;     // function to call
+	enum op_type op1;
+	enum op_type op2;
+	int          cycles;
+	int          cycles_alt; // for non-taken jumps/calls/rets
+};
+
 
 struct cpu* cpu_create(struct mem* mem);
 void cpu_destroy(struct cpu* cpu);

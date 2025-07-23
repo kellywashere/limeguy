@@ -6,19 +6,6 @@
 
 #define OPCODE_PREFIX 0xCB
 
-struct instruction;
-
-typedef void instr_fn(struct cpu* cpu, struct instruction* instr); // instruction function type
-
-struct instruction {
-	char*        mnemonic;
-    instr_fn*    func;     // function to call
-	enum op_type op1;
-	enum op_type op2;
-	int          cycles;
-	int          cycles_alt; // for non-taken jumps/calls/rets
-};
-
 static
 void cpu_init(struct cpu* cpu) {
 	// game boy doctor state:
@@ -42,6 +29,8 @@ void cpu_init(struct cpu* cpu) {
 	cpu->halted = false;
 	cpu->haltbug = false;
 	cpu->stopped = false;
+
+	cpu->prefix = false;
 }
 
 struct cpu* cpu_create(struct mem* mem) {
@@ -231,7 +220,7 @@ void cpu_clock_cycle(struct cpu* cpu) { // process 1 M-cycle
 	}
 
 	// check interrupt
-	if (cpu->ime || cpu->halted) {
+	if (!cpu->prefix && (cpu->ime || cpu->halted)) {
 		u16 interrupts = mem_get_active_interrupts(cpu->mem);
 		for (int bitnr = 0; interrupts != 0 && bitnr <= 4; ++bitnr) {
 			if (interrupts & (1 << bitnr)) {
@@ -257,10 +246,8 @@ void cpu_clock_cycle(struct cpu* cpu) { // process 1 M-cycle
 	// halt bug:
 	cpu->PC = cpu->haltbug ? cpu->PC : cpu->PC + 1;
 	cpu->haltbug = false;
-	bool prefix = opcode == OPCODE_PREFIX;
-	if (prefix)
-		opcode = mem_read(cpu->mem, cpu->PC++) & 0x0FF; // prefix: read next opcode
-	struct instruction* instr = &opcode_lookup[opcode + (prefix ? 256 : 0)];
+	struct instruction* instr = &opcode_lookup[opcode + (cpu->prefix ? 256 : 0)];
+	cpu->prefix = false;
 	cpu->cycles_left = instr->cycles - 1; // -1 for this cycle itself
 	// For jumps/calls/rets, we correct in the instruction function when jump not taken
 
@@ -772,7 +759,9 @@ static void XOR(struct cpu* cpu, struct instruction* instr) {
 	cpu->flags.C = false;
 }
 
-static void PREFIX(struct cpu* cpu, struct instruction* instr) {printf("%s should not have been called\n", instr->mnemonic);}
+static void PREFIX(struct cpu* cpu, struct instruction* instr) {
+	cpu->prefix = true;
+}
 
 static void ILLEGAL(struct cpu* cpu, struct instruction* instr) {printf("%s not implemented yet\n", instr->mnemonic);}
 

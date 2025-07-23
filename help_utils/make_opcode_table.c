@@ -177,25 +177,25 @@ void prefix_block0(int code) {
 	int p0 = code & 0x07;
 	int p1 = (code >> 3) & 0x07;
 	char* mnems[] = {"RLC","RRC","RL","RR","SLA","SRA","SWAP","SRL"};
-	println(mnems[p1], r8_to_str[p0], NIL, p0 == 6 ? 4 : 2, 0, true, code);
+	println(mnems[p1], r8_to_str[p0], NIL, p0 == 6 ? 3 : 1, 0, true, code);
 }
 
 void prefix_block1(int code) {
 	int p0 = code & 0x07;
 	int p1 = (code >> 3) & 0x07;
-	println("BIT", literal_to_str[p1], r8_to_str[p0], p0 == 6 ? 3 : 2, 0, true, code | (1 << 6));
+	println("BIT", literal_to_str[p1], r8_to_str[p0], p0 == 6 ? 2 : 1, 0, true, code | (1 << 6));
 }
 
 void prefix_block2(int code) {
 	int p0 = code & 0x07;
 	int p1 = (code >> 3) & 0x07;
-	println("RES", literal_to_str[p1], r8_to_str[p0], p0 == 6 ? 4 : 2, 0, true, code | (2 << 6));
+	println("RES", literal_to_str[p1], r8_to_str[p0], p0 == 6 ? 3 : 1, 0, true, code | (2 << 6));
 }
 
 void prefix_block3(int code) {
 	int p0 = code & 0x07;
 	int p1 = (code >> 3) & 0x07;
-	println("SET", literal_to_str[p1], r8_to_str[p0], p0 == 6 ? 4 : 2, 0, true, code | (3 << 6));
+	println("SET", literal_to_str[p1], r8_to_str[p0], p0 == 6 ? 3 : 1, 0, true, code | (3 << 6));
 }
 
 int main() {
