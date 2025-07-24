@@ -8,6 +8,7 @@ struct timers {
 
 	int count_div; // counter for DIV
 	int count_tima; // counter for TIMA
+	// The actual timer contents are in mem
 };
 
 struct timers* timers_create(struct mem* mem);

@@ -28,7 +28,7 @@ void timers_mcycle(struct timers* timers) { // called every M-cycle = 4 T-cycles
 	++timers->count_div;
 	if (timers->count_div >= DIVCOUNT) {
 		timers->count_div = 0;
-		mem_divtimer_inc(timers->mem);
+		mem_divtimer_inc(timers->mem); // Also takes care of interrupt flag on overflow
 	}
 
 	i8 tac = mem_read(timers->mem, TAC) & 0x07;

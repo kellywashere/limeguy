@@ -1,6 +1,7 @@
 #ifndef __MEM_H__
 #define __MEM_H__
 
+#include <stdbool.h>
 #include "typedefs.h"
 #include "rom.h"
 
@@ -30,7 +31,16 @@ void mem_write16(struct mem* mem, u16 addr, u16 value);
 i8 mem_get_active_interrupts(struct mem* mem);
 void mem_clear_interrupt_flag(struct mem* mem, int nr);
 
+bool mem_is_cpu_double_speed(struct mem* mem);
+
+// Timer interace
 void mem_divtimer_inc(struct mem* mem);
 void mem_tima_inc(struct mem* mem);
+
+// PPU interface
+void mem_ppu_report_ly(struct mem* mem, int ly);
+i8 mem_ppu_get_stat(struct mem* mem);
+int mem_ppu_get_lycmp(struct mem* mem);
+void mem_ppu_set_stat(struct mem* mem, i8 stat);
 
 #endif

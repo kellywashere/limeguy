@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include "mem.h"
@@ -170,6 +171,12 @@ void mem_set_interrupt_flag(struct mem* mem, int nr) {
 
 void mem_clear_interrupt_flag(struct mem* mem, int nr) {
 	mem->io[IO_IF] &= ~(1 << nr);
+}
+
+bool mem_is_cpu_double_speed(struct mem* mem) {
+	(void)mem;
+	// TODO: return bit 7 of KEY1 ?
+	return false;
 }
 
 void mem_divtimer_inc(struct mem* mem) {
