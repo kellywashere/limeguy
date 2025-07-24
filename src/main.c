@@ -14,6 +14,7 @@
 int break_instrnr = 0; // see usage
 int break_addr = -1;
 int max_instr = 0;
+int start_logging_instrnr = 0;
 
 void print_state_gbdoctor(struct cpu* cpu, FILE* logfile) {
 	if (!logfile) return;
@@ -45,10 +46,11 @@ int main(int argc, char* argv[]) {
 	FILE* logfile = NULL;
 
 	if (argc <= 1) {
-		printf("Usage: %s [[b]addr_hex] [[i]instr#] [lLogfile] [m????] <romfile>\n", argv[0]);
+		printf("Usage: %s [[b]addr_hex] [[i]instr#] [lLogfile] [sinstr#] [m????] <romfile>\n", argv[0]);
 		printf("  b option: breakpoint at address (default: $0100)\n");
 		printf("  i option: breakpoint at from instr# (default: 1)\n");
 		printf("  l option: game boy doctor output enable (status line after eaach instr)\n");
+		printf("  s option: start logging from instr$ given\n");
 		printf("  m option: max #instructions to run\n");
 		printf("---\n");
 		printf("When in step-by-step mode:\n");
@@ -79,6 +81,10 @@ int main(int argc, char* argv[]) {
 			if (!logfile)
 				fprintf(stderr, "Error: could not open log file %s\n", argv[ii] + 1);
 		}
+		if (argv[ii][0] == 's') {
+			if (isdigit(argv[ii][1]))
+				start_logging_instrnr = atoi(argv[ii] + 1);
+		}
 		else if (argv[ii][0] == 'm')
 			max_instr = atoi(argv[ii] + 1);
 	}
@@ -95,17 +101,16 @@ int main(int argc, char* argv[]) {
 	bool break_hit = false;
 	bool done = false;
 	int nr_instr_ran = 0;
-	uint64_t m_cycles = 0;
 
 	clock_t start = clock();
 
 	while (!done && !cpu_is_stopped(cpu)) {
 		timers_clock(timers);
 		
-		if (cpu->cycles_left == 0) {
-			if (logfile) {
+		if (cpu->cycles_left == 0) { // new instruction coming up
+			if (logfile && nr_instr_ran + 1 >= start_logging_instrnr) {
 #ifdef EXTRA_LOGGING
-				fprintf(logfile, "%8u ", nr_instr_ran + 1);
+				fprintf(logfile, "%8u %d ", nr_instr_ran + 1, cpu->mcycles);
 #endif
 				print_state_gbdoctor(cpu, logfile);
 			}
@@ -151,15 +156,13 @@ int main(int argc, char* argv[]) {
 		}
 		else
 			cpu_clock_cycle(cpu);
-
-		++m_cycles;
 	}
 
 	clock_t end = clock();
 	double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;
 
 	printf("Instructions executed: %d\n", nr_instr_ran);
-	printf("Clock speed: %4.3f MHz (T-cycles / sec)\n", ((double)(4 * m_cycles)) / elapsed_time / 1.0e6);
+	printf("Clock speed: %4.3f MHz (T-cycles / sec)\n", ((double)(4 * cpu->mcycles)) / elapsed_time / 1.0e6);
 
 	if (logfile)
 		fclose(logfile);

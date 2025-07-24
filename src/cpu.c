@@ -51,13 +51,6 @@ bool cpu_is_stopped(struct cpu* cpu) {
 	return cpu->stopped;
 }
 
-static
-void cpu_cycle(struct cpu* cpu) {
-	cpu->cycles_left = cpu->cycles_left > 0 ? cpu->cycles_left - 1 : 0;
-	timers_clock(cpu->timers);
-	//clock_cycle(cpu->clock);
-}
-
 static struct instruction opcode_lookup[512];   // contains instruction info includinng jump table; initialized later
 
 static
@@ -89,22 +82,45 @@ int cpu_get_operand_size(struct cpu* cpu, enum op_type tp) {
 	return ((REG_BC <= tp && tp <= REG_SP) || tp == IMM16) ? 16 : 8;
 }
 
-/*
+// TODO: Move into cpu_clock_cycle fn
+static
+void cpu_cycle(struct cpu* cpu) {
+// Adds one more clock cycle, and calls periperal clock cycle fns
+	++cpu->mcycles;
+	//if (cpu->cycles_left <= 0)
+		//fprintf(stderr, "cpu_cycle: cycles left already %d\n", cpu->cycles_left);
+	cpu->cycles_left = cpu->cycles_left > 0 ? cpu->cycles_left - 1 : 0;
+	timers_clock(cpu->timers);
+	//clock_cycle(cpu->clock);
+}
+
 static
 i8 cpu_memread_cycle(struct cpu* cpu, u16 addr) {
-	//cpu_cycle(cpu);
+	cpu_cycle(cpu);
 	return mem_read(cpu->mem, addr);
 }
 
 static
-i8 cpu_memread16_cycle(struct cpu* cpu, u16 addr) {
-	//cpu_cycle(cpu);
+u16 cpu_memread16_cycle(struct cpu* cpu, u16 addr) {
+	cpu_cycle(cpu);
 	i8 lsbyte = mem_read(cpu->mem, addr++);
-	//cpu_cycle(cpu);
+	cpu_cycle(cpu);
 	i8 msbyte = mem_read(cpu->mem, addr);
 	return (((u16)msbyte) << 8) | ((u16)lsbyte & 0x0FF);
 }
-*/
+
+static
+void cpu_memwrite_cycle(struct cpu* cpu, u16 addr, i8 value) {
+	cpu_cycle(cpu);
+	mem_write(cpu->mem, addr, value);
+}
+
+void cpu_memwrite16_cycle(struct cpu* cpu, u16 addr, u16 value) {
+	cpu_cycle(cpu);
+	mem_write(cpu->mem, addr++, value & 0x00FF);
+	cpu_cycle(cpu);
+	mem_write(cpu->mem, addr, value >> 8);
+}
 
 static
 int cpu_get_operand(struct cpu* cpu, enum op_type tp) {
@@ -122,38 +138,38 @@ int cpu_get_operand(struct cpu* cpu, enum op_type tp) {
 	if (tp <= MEM_HL) {
 		int idx = (tp - MEM_BC) * 2 + REG_B;
 		u16 addr = bytes_to_word(cpu->regs[idx], cpu->regs[idx + 1]);
-		return mem_read(cpu->mem, addr);
+		return cpu_memread_cycle(cpu, addr);
 	}
 	if (tp <= MEM_HLD) {
 		u16 addr = bytes_to_word(cpu->regs[REG_H], cpu->regs[REG_L]);
 		u16 new_hl = tp == MEM_HLI ? addr + 1 : addr - 1;
 		word_to_bytes(new_hl, &cpu->regs[REG_H], &cpu->regs[REG_L]);
-		return mem_read(cpu->mem, addr);
+		return cpu_memread_cycle(cpu, addr);
 	}
 	if (tp == IMM8)
-		return mem_read(cpu->mem, cpu->PC++);
+		return cpu_memread_cycle(cpu, cpu->PC++);
 	if (tp == IMM16) {
-		u16 val = mem_read16(cpu->mem, cpu->PC);
+		u16 val = cpu_memread16_cycle(cpu, cpu->PC);
 		cpu->PC += 2;
 		return val;
 	}
 	if (tp == MEM_IMM8) {
-		u16 addr = 0x0FF00 + ((u16)mem_read(cpu->mem, cpu->PC++) & 0x0FF);
-		return mem_read(cpu->mem, addr);
+		u16 addr = 0x0FF00 + ((u16)cpu_memread_cycle(cpu, cpu->PC++) & 0x0FF);
+		return cpu_memread_cycle(cpu, addr);
 	}
 	if (tp == MEM_IMM16) {
-		u16 addr = mem_read16(cpu->mem, cpu->PC);
+		u16 addr = cpu_memread16_cycle(cpu, cpu->PC);
 		cpu->PC += 2;
-		return mem_read(cpu->mem, addr);
+		return cpu_memread_cycle(cpu, addr);
 	}
 	/* Special case: partly handled in LD instr itself */
 	if (tp == SP_IMM8) {
-		i8 offs = mem_read(cpu->mem, cpu->PC++);
+		i8 offs = cpu_memread_cycle(cpu, cpu->PC++);
 		return offs;
 	}
 	if (tp == MEM_C) {
 		u16 addr = 0x0FF00 + ((u16)cpu->regs[REG_C] & 0x0FF);
-		return mem_read(cpu->mem, addr);
+		return cpu_memread_cycle(cpu, addr);
 	}
 	if (tp >= LIT0 && tp <= LIT7)
 		return tp - LIT0;
@@ -181,31 +197,31 @@ void cpu_set_operand(struct cpu* cpu, enum op_type tp, int val) {
 	else if (tp <= MEM_HL) {
 		int idx = (tp - MEM_BC) * 2 + REG_B;
 		u16 addr = bytes_to_word(cpu->regs[idx], cpu->regs[idx + 1]);
-		mem_write(cpu->mem, addr, val);
+		cpu_memwrite_cycle(cpu, addr, val);
 	}
 	else if (tp <= MEM_HLD) {
 		u16 addr = bytes_to_word(cpu->regs[REG_H], cpu->regs[REG_L]);
 		int new_hl = tp == MEM_HLI ? addr + 1 : addr - 1;
 		word_to_bytes(new_hl, &cpu->regs[REG_H], &cpu->regs[REG_L]);
-		mem_write(cpu->mem, addr, val);
+		cpu_memwrite_cycle(cpu, addr, val);
 	}
 	else if (tp == MEM_IMM8) {
-		u16 addr = 0x0FF00 + ((u16)mem_read(cpu->mem, cpu->PC++) & 0x0FF);
-		mem_write(cpu->mem, addr, val);
+		u16 addr = 0x0FF00 + ((u16)cpu_memread_cycle(cpu, cpu->PC++) & 0x0FF);
+		cpu_memwrite_cycle(cpu, addr, val);
 	}
 	else if (tp == MEM_IMM16) {
-		u16 addr = mem_read16(cpu->mem, cpu->PC);
+		u16 addr = cpu_memread16_cycle(cpu, cpu->PC);
 		cpu->PC += 2;
-		mem_write(cpu->mem, addr, val);
+		cpu_memwrite_cycle(cpu, addr, val);
 	}
 	else if (tp == MEM16B_IMM16) {
-		u16 addr = mem_read16(cpu->mem, cpu->PC);
+		u16 addr = cpu_memread16_cycle(cpu, cpu->PC);
 		cpu->PC += 2;
-		mem_write16(cpu->mem, addr, val);
+		cpu_memwrite16_cycle(cpu, addr, val);
 	}
 	else if (tp == MEM_C) {
 		u16 addr = 0x0FF00 + ((u16)cpu->regs[REG_C] & 0x0FF);
-		mem_write(cpu->mem, addr, val);
+		cpu_memwrite_cycle(cpu, addr, val);
 	}
 	else
 		fprintf(stderr, "cpu_set_operand: unreachable (tp = %d)\n", tp);
@@ -233,11 +249,13 @@ void cpu_do_interrupt(struct cpu* cpu, int nr) {
 	cpu->ime = false;
 	cpu->cycles_left = 4;
 	cpu->SP -= 2;
-	mem_write16(cpu->mem, cpu->SP, cpu->PC);
+	cpu_memwrite16_cycle(cpu, cpu->SP, cpu->PC);
 	cpu->PC = 0x040 + nr * 8;
 }
 
 void cpu_clock_cycle(struct cpu* cpu) { // process 1 M-cycle
+	++cpu->mcycles;
+
 	if (cpu->stopped)
 		return; // TODO: 
 
@@ -450,7 +468,7 @@ static void CALL(struct cpu* cpu, struct instruction* instr) {
 	bool cond = cpu_check_cond(cpu, instr->op1);
 	if (cond) {
 		cpu->SP -= 2;
-		mem_write16(cpu->mem, cpu->SP, cpu->PC);
+		cpu_memwrite16_cycle(cpu, cpu->SP, cpu->PC);
 		cpu->PC = addr;
 	}
 	else
@@ -583,7 +601,7 @@ static void OR(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void POP(struct cpu* cpu, struct instruction* instr) {
-	u16 w = mem_read16(cpu->mem, cpu->SP);
+	u16 w = cpu_memread16_cycle(cpu, cpu->SP);
 	cpu->SP += 2;
 	cpu_set_operand(cpu, instr->op1, w);
 }
@@ -591,7 +609,7 @@ static void POP(struct cpu* cpu, struct instruction* instr) {
 static void PUSH(struct cpu* cpu, struct instruction* instr) {
 	u16 w = cpu_get_operand(cpu, instr->op1);
 	cpu->SP -= 2;
-	mem_write16(cpu->mem, cpu->SP, w);
+	cpu_memwrite16_cycle(cpu, cpu->SP, w);
 }
 
 static void RES(struct cpu* cpu, struct instruction* instr) {
@@ -604,7 +622,7 @@ static void RES(struct cpu* cpu, struct instruction* instr) {
 static void RET(struct cpu* cpu, struct instruction* instr) {
 	bool cond = cpu_check_cond(cpu, instr->op1);
 	if (cond) {
-		cpu->PC = mem_read16(cpu->mem, cpu->SP);
+		cpu->PC = cpu_memread16_cycle(cpu, cpu->SP);
 		cpu->SP += 2;
 	}
 	else
@@ -613,7 +631,7 @@ static void RET(struct cpu* cpu, struct instruction* instr) {
 
 static void RETI(struct cpu* cpu, struct instruction* instr) {
 	cpu->ime = true;
-	cpu->PC = mem_read16(cpu->mem, cpu->SP);
+	cpu->PC = cpu_memread16_cycle(cpu, cpu->SP);
 	cpu->SP += 2;
 }
 
@@ -701,7 +719,7 @@ static void RRCA(struct cpu* cpu, struct instruction* instr) {
 
 static void RST(struct cpu* cpu, struct instruction* instr) {
 	cpu->SP -= 2;
-	mem_write16(cpu->mem, cpu->SP, cpu->PC);
+	cpu_memwrite16_cycle(cpu, cpu->SP, cpu->PC);
 	cpu->PC = 8 * cpu_get_operand(cpu, instr->op1);
 }
 

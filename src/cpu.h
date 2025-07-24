@@ -58,6 +58,10 @@ struct cpu {
 	bool haltbug;
 
 	bool stopped;
+
+
+	// DEBUG
+	int mcycles;
 };
 
 typedef void instr_fn(struct cpu* cpu, struct instruction* instr); // instruction function type
