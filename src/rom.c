@@ -5,7 +5,7 @@
 #define CARTTYPE_ADDR 0x0147
 
 static
-i8* read_binary_file(const char* fname, unsigned int* size) {
+u8* read_binary_file(const char* fname, unsigned int* size) {
 	FILE *f = fopen(fname, "rb");
 	if (!f) {
 		fprintf(stderr, "Error loading ROM file %s", fname);
@@ -14,7 +14,7 @@ i8* read_binary_file(const char* fname, unsigned int* size) {
 	fseek(f, 0, SEEK_END);
 	*size = ftell(f);
 	fseek(f, 0, SEEK_SET);
-	i8* data = malloc(*size);
+	u8* data = malloc(*size);
 	fread(data, 1, *size, f);
 	fclose(f);
 	return data;
@@ -40,13 +40,13 @@ u16 rom_get_type(struct rom* rom) {
 	return rom->data[CARTTYPE_ADDR] & 0x0FF;
 }
 
-i8 rom_read(struct rom* rom, u16 addr) {
+u8 rom_read(struct rom* rom, u16 addr) {
 	unsigned int addr_eff = addr;
 	addr_eff = addr_eff >= 0x4000 ? (addr & 0x3FFF) + rom->bank * 0x4000 : addr_eff;
 	return rom->data[addr_eff];
 }
 
-void rom_write(struct rom* rom, u16 addr, i8 value) {
+void rom_write(struct rom* rom, u16 addr, u8 value) {
 	addr >>= 13;
 	switch (addr) {
 		case 0: // RAM enbl

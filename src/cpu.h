@@ -41,7 +41,7 @@ struct instruction; // declare for next part
 
 struct cpu {
 	// registers & flags
-	i8           regs[NR_REGS];
+	u8           regs[NR_REGS];
 	u16          SP;
 	u16          PC;
 	struct flags flags;

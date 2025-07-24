@@ -31,8 +31,7 @@ void timers_mcycle(struct timers* timers) { // called every M-cycle = 4 T-cycles
 		mem_divtimer_inc(timers->mem); // Also takes care of interrupt flag on overflow
 	}
 
-	i8 tac = mem_read(timers->mem, TAC) & 0x07;
-	// i8 tac = timers->mem->io[TAC & 0x0FF] & 0x03; /* FASTER... TODO: SPEED UP mem interactions */
+	u8 tac = mem_read(timers->mem, TAC) & 0x07; // TODO: Add interface like for ppu for faster access
 	if (tac >> 2) { // enbl
 		++timers->count_tima;
 		if (timers->count_tima >= clockselect_to_maxcount[tac & 0x03]) {

@@ -9,4 +9,5 @@ compile_commands.json
 *.gb
 *.log
 */bu/
-
+help_utils/test*
+*.*_bu

@@ -84,7 +84,7 @@ void mem_disconnect_rom(struct mem* mem) {
 	mem->rom = NULL;
 }
 
-i8 mem_read(struct mem* mem, u16 addr) {
+u8 mem_read(struct mem* mem, u16 addr) {
 	if (addr >= ECHO_RAM && addr < ECHO_RAM + ECHO_RAM_SIZE)
 		addr -= ECHO_RAM_OFFS;
 	if (addr < VRAM) // ROM bank 00 & 01
@@ -97,7 +97,7 @@ i8 mem_read(struct mem* mem, u16 addr) {
 		return mem->oam[addr & 0xFF]; // TODO
 	}
 	else if (addr >= IO_START && addr < (IO_START + IO_SIZE)) { // IO operation
-		u16 io_idx = addr & 0xFF;
+		u8 io_idx = addr & 0xFF;
 	
 		// FIXME: this is a hack to pass gb doctor
 		if (io_idx == 0x44) return 0x90;
@@ -112,13 +112,12 @@ i8 mem_read(struct mem* mem, u16 addr) {
 }
 
 u16 mem_read16(struct mem* mem, u16 addr) {
-	i8 lsbyte = mem_read(mem, addr++);
-	i8 msbyte = mem_read(mem, addr);
-	return (((u16)msbyte) << 8) | ((u16)lsbyte & 0x0FF);
+	u8 lsbyte = mem_read(mem, addr++);
+	u8 msbyte = mem_read(mem, addr);
+	return (((u16)msbyte) << 8) | (u16)lsbyte;
 }
 
-void mem_write(struct mem* mem, u16 addr, i8 value) {
-	u16 v = value & 0xFF; // unsigned value
+void mem_write(struct mem* mem, u16 addr, u8 value) {
 	if (addr >= ECHO_RAM && addr < ECHO_RAM + ECHO_RAM_SIZE)
 		addr -= ECHO_RAM_OFFS;
 	if (addr < VRAM) // ROM bank 00 & 01
@@ -135,7 +134,7 @@ void mem_write(struct mem* mem, u16 addr, i8 value) {
 		mem->io[io_idx] = value;
 		switch (io_idx) {
 			case IO_SC: // Serial out
-				if (v == 0x81) {
+				if (value == 0x81) {
 					printf("%c", mem->io[IO_SB]);
 					mem->io[io_idx] = 0;
 					/*
@@ -161,7 +160,7 @@ void mem_write16(struct mem* mem, u16 addr, u16 value) {
 	mem_write(mem, addr, value >> 8);
 }
 
-i8 mem_get_active_interrupts(struct mem* mem) {
+u8 mem_get_active_interrupts(struct mem* mem) {
 	return mem->ie & mem->io[IO_IF];
 }
 

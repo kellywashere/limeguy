@@ -51,23 +51,23 @@ bool cpu_is_stopped(struct cpu* cpu) {
 static struct instruction opcode_lookup[512];   // contains instruction info includinng jump table; initialized later
 
 static
-u16 bytes_to_word(i8 msbyte, i8 lsbyte) {
-	return (((u16)msbyte) << 8) | ((u16)lsbyte & 0x0FF);
+u16 bytes_to_word(u8 msbyte, u8 lsbyte) {
+	return (((u16)msbyte) << 8) | (u16)lsbyte;
 }
 
 static
-void word_to_bytes(u16 w, i8* msbyte, i8* lsbyte) {
+void word_to_bytes(u16 w, u8* msbyte, u8* lsbyte) {
 	*msbyte = w >> 8;
 	*lsbyte = w & 0x0FF;
 }
 
 static
-i8 flags_to_byte(struct flags *f) {
+u8 flags_to_byte(struct flags *f) {
 	return (f->Z << 7) | (f->N << 6) | (f->H << 5) | (f->C << 4);
 }
 
 static
-void byte_to_flags(struct flags *f, i8 b) {
+void byte_to_flags(struct flags *f, u8 b) {
 	f->Z = ((b >> 7) & 1) == 1;
 	f->N = ((b >> 6) & 1) == 1;
 	f->H = ((b >> 5) & 1) == 1;
@@ -89,7 +89,7 @@ void cpu_mcycle(struct cpu* cpu) {
 }
 
 static
-i8 cpu_memread_cycle(struct cpu* cpu, u16 addr) {
+u8 cpu_memread_cycle(struct cpu* cpu, u16 addr) {
 	cpu_mcycle(cpu);
 	return mem_read(cpu->mem, addr);
 }
@@ -97,14 +97,14 @@ i8 cpu_memread_cycle(struct cpu* cpu, u16 addr) {
 static
 u16 cpu_memread16_cycle(struct cpu* cpu, u16 addr) {
 	cpu_mcycle(cpu);
-	i8 lsbyte = mem_read(cpu->mem, addr++);
+	u8 lsbyte = mem_read(cpu->mem, addr++);
 	cpu_mcycle(cpu);
-	i8 msbyte = mem_read(cpu->mem, addr);
-	return (((u16)msbyte) << 8) | ((u16)lsbyte & 0x0FF);
+	u8 msbyte = mem_read(cpu->mem, addr);
+	return (((u16)msbyte) << 8) | (u16)lsbyte;
 }
 
 static
-void cpu_memwrite_cycle(struct cpu* cpu, u16 addr, i8 value) {
+void cpu_memwrite_cycle(struct cpu* cpu, u16 addr, u8 value) {
 	cpu_mcycle(cpu);
 	mem_write(cpu->mem, addr, value);
 }
@@ -148,7 +148,7 @@ int cpu_get_operand(struct cpu* cpu, enum op_type tp) {
 		return val;
 	}
 	if (tp == MEM_IMM8) {
-		u16 addr = 0x0FF00 + ((u16)cpu_memread_cycle(cpu, cpu->PC++) & 0x0FF);
+		u16 addr = 0x0FF00 + cpu_memread_cycle(cpu, cpu->PC++);
 		return cpu_memread_cycle(cpu, addr);
 	}
 	if (tp == MEM_IMM16) {
@@ -158,11 +158,12 @@ int cpu_get_operand(struct cpu* cpu, enum op_type tp) {
 	}
 	/* Special case: partly handled in LD instr itself */
 	if (tp == SP_IMM8) {
-		i8 offs = cpu_memread_cycle(cpu, cpu->PC++);
-		return offs;
+		u8 offs = cpu_memread_cycle(cpu, cpu->PC++);
+		// convert to signed int
+		return (int)((i8)offs);
 	}
 	if (tp == MEM_C) {
-		u16 addr = 0x0FF00 + ((u16)cpu->regs[REG_C] & 0x0FF);
+		u16 addr = 0x0FF00 + cpu->regs[REG_C];
 		return cpu_memread_cycle(cpu, addr);
 	}
 	if (tp >= LIT0 && tp <= LIT7)
@@ -182,7 +183,7 @@ void cpu_set_operand(struct cpu* cpu, enum op_type tp, int val) {
 		word_to_bytes(val, &cpu->regs[idx], &cpu->regs[idx + 1]);
 	}
 	else if (tp == REG_AF) {
-		i8 f;
+		u8 f;
 		word_to_bytes(val, &cpu->regs[REG_A], &f);
 		byte_to_flags(&cpu->flags, f);
 	}
@@ -340,7 +341,7 @@ void cpu_fprint_operand(struct cpu* cpu, enum op_type tp, FILE* stream) {
 		fprintf(stream,"[$%04X]", addr);
 	}
 	else if (tp == SP_IMM8) {
-		i8 offs = mem_read(cpu->mem, cpu->PC++);
+		i8 offs = (i8)mem_read(cpu->mem, cpu->PC++);
 		if (offs >= 0)
 			fprintf(stream,"SP+%d", offs);
 		else
@@ -406,19 +407,19 @@ void cpu_print_info(struct cpu* cpu) {
 
 // Instructions
 void ADC(struct cpu* cpu, struct instruction* instr) {
-	i8 op = cpu_get_operand(cpu, instr->op2);
+	i8 op = (i8)cpu_get_operand(cpu, instr->op2);
 	i8 c = cpu->flags.C ? 1 : 0;
 	cpu->flags.N = false;
 	cpu->flags.H = (cpu->regs[REG_A] & 0x0F) + (op & 0x0F) + c > 0x0F;
 	cpu->flags.C = ((u16)cpu->regs[REG_A] & 0xFF) + ((u16)op & 0xFF) + c > 0xFF;
-	cpu->regs[REG_A] += op + c;
+	cpu->regs[REG_A] += (u8)(op + c);
 	cpu->flags.Z = cpu->regs[REG_A] == 0;
 }
 
 static void ADD(struct cpu* cpu, struct instruction* instr) {
 	cpu->flags.N = false;
 	if (instr->op1 == REG_SP) {
-		i8 op = cpu_get_operand(cpu, instr->op2);
+		i8 op = (i8)cpu_get_operand(cpu, instr->op2);
 		cpu->flags.H = (cpu->SP & 0x0F) + (op & 0x0F) > 0x0F;
 		cpu->flags.C = (cpu->SP & 0xFF) + ((u16)op & 0xFF) > 0xFF;
 		cpu->SP += op;
@@ -432,7 +433,7 @@ static void ADD(struct cpu* cpu, struct instruction* instr) {
 		cpu_set_operand(cpu, instr->op1, target + op);
 	}
 	else {
-		i8 op = cpu_get_operand(cpu, instr->op2);
+		i8 op = (i8)cpu_get_operand(cpu, instr->op2);
 		cpu->flags.H = (cpu->regs[REG_A] & 0x0F) + (op & 0x0F) > 0x0F;
 		cpu->flags.C = ((u16)cpu->regs[REG_A] & 0xFF) + ((u16)op & 0xFF) > 0xFF;
 		cpu->regs[REG_A] += op;
@@ -441,7 +442,7 @@ static void ADD(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void AND(struct cpu* cpu, struct instruction* instr) {
-	i8 op = cpu_get_operand(cpu, instr->op2);
+	u8 op = cpu_get_operand(cpu, instr->op2);
 	cpu->regs[REG_A] &= op;
 	cpu->flags.Z = cpu->regs[REG_A] == 0;
 	cpu->flags.N = false;
@@ -450,8 +451,8 @@ static void AND(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void BIT(struct cpu* cpu, struct instruction* instr) {
-	u16 b = cpu_get_operand(cpu, instr->op1) & 0x0FF;
-	i8 op = cpu_get_operand(cpu, instr->op2);
+	u8 b  = cpu_get_operand(cpu, instr->op1);
+	u8 op = cpu_get_operand(cpu, instr->op2);
 	cpu->flags.Z = ((op >> b) & 1) == 0;
 	cpu->flags.N = false;
 	cpu->flags.H = true;
@@ -477,10 +478,10 @@ static void CCF(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void CP(struct cpu* cpu, struct instruction* instr) {
-	i8 op = cpu_get_operand(cpu, instr->op2);
+	u8 op = cpu_get_operand(cpu, instr->op2);
 	cpu->flags.N = true;
 	cpu->flags.H = (cpu->regs[REG_A] & 0x0F) < (op & 0x0F);
-	cpu->flags.C = ((u16)cpu->regs[REG_A] & 0xFF) < ((u16)op & 0xFF);
+	cpu->flags.C = cpu->regs[REG_A] < op;
 	cpu->flags.Z = cpu->regs[REG_A] == op;
 }
 
@@ -495,7 +496,7 @@ static void DAA(struct cpu* cpu, struct instruction* instr) {
 	(void)instr;
 	// see: https://blog.ollien.com/posts/gb-daa/
     i8 offset = 0;
-    u16 a = cpu->regs[REG_A] & 0x0FF; // force unsigned for cmp to 0x99
+    u8 a = cpu->regs[REG_A];
     bool carry_out = false;
     if ( (!cpu->flags.N && (a & 0x0F) > 0x09) || cpu->flags.H) {
         offset |= 0x06;
@@ -505,7 +506,7 @@ static void DAA(struct cpu* cpu, struct instruction* instr) {
 		carry_out = true;
     }
 	a = cpu->flags.N ? a - offset : a + offset;
-	cpu->regs[REG_A] = a & 0xff;
+	cpu->regs[REG_A] = a;
 	cpu->flags.Z = cpu->regs[REG_A] == 0;
 	cpu->flags.H = false;
 	cpu->flags.C = carry_out;
@@ -516,7 +517,7 @@ static void DEC(struct cpu* cpu, struct instruction* instr) {
 		cpu_set_operand(cpu, instr->op1, cpu_get_operand(cpu, instr->op1) - 1);
 	}
 	else {
-		i8 op = cpu_get_operand(cpu, instr->op1);
+		u8 op = cpu_get_operand(cpu, instr->op1);
 		cpu->flags.H = (op & 0x0F) == 0;
 		cpu->flags.N = true;
 		--op;
@@ -547,7 +548,7 @@ static void INC(struct cpu* cpu, struct instruction* instr) {
 		cpu_set_operand(cpu, instr->op1, cpu_get_operand(cpu, instr->op1) + 1);
 	}
 	else {
-		i8 op = cpu_get_operand(cpu, instr->op1);
+		u8 op = cpu_get_operand(cpu, instr->op1);
 		cpu->flags.H = (op & 0x0F) == 0x0F;
 		cpu->flags.N = false;
 		++op;
@@ -560,20 +561,22 @@ static void JP(struct cpu* cpu, struct instruction* instr) {
 	u16 addr = cpu_get_operand(cpu, instr->op2);
 	bool cond = cpu_check_cond(cpu, instr->op1);
 	cpu->PC = cond ? addr : cpu->PC;
+	// correct cycles in case jump not taken
 	cpu->cycles_left -= cond ? 0 : (instr->cycles - instr->cycles_alt);
 }
 
 static void JR(struct cpu* cpu, struct instruction* instr) {
-	i8 offs = cpu_get_operand(cpu, instr->op2);
+	i8 offs = (i8)cpu_get_operand(cpu, instr->op2);
 	bool cond = cpu_check_cond(cpu, instr->op1);
 	cpu->PC = cond ? cpu->PC + offs : cpu->PC;
+	// correct cycles in case jump not taken
 	cpu->cycles_left -= cond ? 0 : (instr->cycles - instr->cycles_alt);
 }
 
 static void LD(struct cpu* cpu, struct instruction* instr) {
 	// Special case: LD HL, SP + imm8
 	if (instr->op2 == SP_IMM8) {
-		i8 imm8 = cpu_get_operand(cpu, instr->op2);
+		i8 imm8 = (i8)cpu_get_operand(cpu, instr->op2);
 		cpu->flags.H = (cpu->SP & 0x0F) + (imm8 & 0x0F) > 0x0F;
 		cpu->flags.C = (cpu->SP & 0xFF) + ((u16)imm8 & 0xFF) > 0xFF;
 		cpu_set_operand(cpu, instr->op1, cpu->SP + imm8);
@@ -594,7 +597,7 @@ static void NOP(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void OR(struct cpu* cpu, struct instruction* instr) {
-	i8 op = cpu_get_operand(cpu, instr->op2);
+	u8 op = cpu_get_operand(cpu, instr->op2);
 	cpu->regs[REG_A] |= op;
 	cpu->flags.Z = cpu->regs[REG_A] == 0;
 	cpu->flags.N = false;
@@ -616,7 +619,7 @@ static void PUSH(struct cpu* cpu, struct instruction* instr) {
 
 static void RES(struct cpu* cpu, struct instruction* instr) {
 	u16 b = cpu_get_operand(cpu, instr->op1);
-	i8 op = cpu_get_operand(cpu, instr->op2);
+	u8 op = cpu_get_operand(cpu, instr->op2);
 	op &= ~(1 << b);
 	cpu_set_operand(cpu, instr->op2, op);
 }
@@ -651,7 +654,7 @@ static void RL(struct cpu* cpu, struct instruction* instr) {
 
 static void RLA(struct cpu* cpu, struct instruction* instr) {
 	(void)instr;
-    u16 a = cpu->regs[REG_A] & 0x0FF; // expand width
+    u16 a = cpu->regs[REG_A]; // expand width
 	a = (a << 1) | (cpu->flags.C ? 1 : 0);
 	cpu->regs[REG_A] = a & 0x0FF;
 	cpu->flags.C = (a & 0x100) == 0x100;
@@ -673,7 +676,7 @@ static void RLC(struct cpu* cpu, struct instruction* instr) {
 
 static void RLCA(struct cpu* cpu, struct instruction* instr) {
 	(void)instr;
-    u16 a = cpu->regs[REG_A] & 0x0FF; // expand width
+    u16 a = cpu->regs[REG_A]; // expand width
 	a <<= 1;
 	cpu->flags.C = (a & 0x100) == 0x100;
 	cpu->regs[REG_A] = (a & 0x0FF) | (cpu->flags.C ? 1 : 0);
@@ -695,7 +698,7 @@ static void RR(struct cpu* cpu, struct instruction* instr) {
 
 static void RRA(struct cpu* cpu, struct instruction* instr) {
 	(void)instr;
-    u16 a = cpu->regs[REG_A] & 0x0FF; // expand width
+    u16 a = cpu->regs[REG_A]; // expand width
 	a |= cpu->flags.C ? 0x100 : 0;
 	cpu->flags.C = (a & 1) == 1;
 	cpu->regs[REG_A] = (a >> 1);
@@ -731,7 +734,7 @@ static void RST(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void SBC(struct cpu* cpu, struct instruction* instr) {
-	i8 op = cpu_get_operand(cpu, instr->op2);
+	i8 op = (i8)cpu_get_operand(cpu, instr->op2);
 	i8 c = cpu->flags.C ? 1 : 0;
 	cpu->flags.N = true;
 	cpu->flags.H = (cpu->regs[REG_A] & 0x0F) < (op & 0x0F) + c;
@@ -749,7 +752,7 @@ static void SCF(struct cpu* cpu, struct instruction* instr) {
 
 static void SET(struct cpu* cpu, struct instruction* instr) {
 	u16 b = cpu_get_operand(cpu, instr->op1);
-	i8 op = cpu_get_operand(cpu, instr->op2);
+	u8 op = cpu_get_operand(cpu, instr->op2);
 	op |= (1 << b);
 	cpu_set_operand(cpu, instr->op2, op);
 }
@@ -791,7 +794,7 @@ static void STOP(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void SUB(struct cpu* cpu, struct instruction* instr) {
-	i8 op = cpu_get_operand(cpu, instr->op2);
+	i8 op = (i8)cpu_get_operand(cpu, instr->op2);
 	cpu->flags.N = true;
 	cpu->flags.H = (cpu->regs[REG_A] & 0x0F) < (op & 0x0F);
 	cpu->flags.C = ((u16)cpu->regs[REG_A] & 0xFF) < ((u16)op & 0xFF);
@@ -800,7 +803,7 @@ static void SUB(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void SWAP(struct cpu* cpu, struct instruction* instr) {
-    u16 r = cpu_get_operand(cpu, instr->op1) & 0x0FF;
+    u8 r = cpu_get_operand(cpu, instr->op1);
 	r = (r >> 4) | ((r & 0x0F) << 4);
 	cpu_set_operand(cpu, instr->op1, r);
 	cpu->flags.Z = r == 0;
@@ -810,7 +813,7 @@ static void SWAP(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void XOR(struct cpu* cpu, struct instruction* instr) {
-	i8 op = cpu_get_operand(cpu, instr->op2);
+	u8 op = cpu_get_operand(cpu, instr->op2);
 	cpu->regs[REG_A] ^= op;
 	cpu->flags.Z = cpu->regs[REG_A] == 0;
 	cpu->flags.N = false;
