@@ -105,57 +105,52 @@ int main(int argc, char* argv[]) {
 	clock_t start = clock();
 
 	while (!done && !cpu_is_stopped(cpu)) {
-		timers_clock(timers);
-		
-		if (cpu->cycles_left == 0) { // new instruction coming up
-			if (logfile && nr_instr_ran + 1 >= start_logging_instrnr) {
+
+		if (logfile && nr_instr_ran + 1 >= start_logging_instrnr) {
 #ifdef EXTRA_LOGGING
-				fprintf(logfile, "%8u %d ", nr_instr_ran + 1, cpu->mcycles);
+			fprintf(logfile, "%8u %d ", nr_instr_ran + 1, cpu->mcycles);
 #endif
-				print_state_gbdoctor(cpu, logfile);
-			}
-
-			if (break_instrnr > 0 && nr_instr_ran + 1 == break_instrnr)
-				break_hit = true;
-			if (break_addr >= 0 && cpu->PC == break_addr)
-				break_hit = true;
-			if (mem->io[0x03] && cpu->PC >= 0xC000)
-				break_hit = true;
-
-			if (break_hit) {
-				printf("\nInstr #: %u\n", nr_instr_ran + 1);
-				cpu_print_info(cpu);
-				char buf[80];
-				fgets(buf, 80, stdin);
-				if (buf[0] == 'q')
-					done = true;
-				else if (buf[0] == 'c')
-					break_hit = false;
-				else if (buf[0] == 'd') {
-					u16 disp_addr = strtol(buf + 1, NULL, 16);
-					printf("Mem content: $%02X\n", mem_read(mem, disp_addr));
-				}
-				else if (buf[0] == 'l' && !logfile) {
-					// Remove newline
-					char* bb = buf + 1;
-					while (*bb && *bb != '\n')
-						++bb;
-					*bb = '\0';
-					break_hit = false;
-					logfile = fopen(buf + 1, "w");
-					if (!logfile)
-						fprintf(stderr, "Error: could not open log file %s\n", buf + 1);
-				}
-			}
-
-			cpu_clock_cycle(cpu); // this one does an actual instruction
-
-			++nr_instr_ran;
-			if (nr_instr_ran == max_instr)
-				done = true;
+			print_state_gbdoctor(cpu, logfile);
 		}
-		else
-			cpu_clock_cycle(cpu);
+
+		if (break_instrnr > 0 && nr_instr_ran + 1 == break_instrnr)
+			break_hit = true;
+		if (break_addr >= 0 && cpu->PC == break_addr)
+			break_hit = true;
+		if (mem->io[0x03] && cpu->PC >= 0xC000)
+			break_hit = true;
+
+		if (break_hit) {
+			printf("\nInstr #: %u\n", nr_instr_ran + 1);
+			cpu_print_info(cpu);
+			char buf[80];
+			fgets(buf, 80, stdin);
+			if (buf[0] == 'q')
+				done = true;
+			else if (buf[0] == 'c')
+				break_hit = false;
+			else if (buf[0] == 'd') {
+				u16 disp_addr = strtol(buf + 1, NULL, 16);
+				printf("Mem content: $%02X\n", mem_read(mem, disp_addr));
+			}
+			else if (buf[0] == 'l' && !logfile) {
+				// Remove newline
+				char* bb = buf + 1;
+				while (*bb && *bb != '\n')
+					++bb;
+				*bb = '\0';
+				break_hit = false;
+				logfile = fopen(buf + 1, "w");
+				if (!logfile)
+					fprintf(stderr, "Error: could not open log file %s\n", buf + 1);
+			}
+		}
+
+		cpu_run_instruction(cpu);
+
+		++nr_instr_ran;
+		if (nr_instr_ran == max_instr)
+			done = true;
 	}
 
 	clock_t end = clock();

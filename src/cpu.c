@@ -87,9 +87,7 @@ static
 void cpu_cycle(struct cpu* cpu) {
 // Adds one more clock cycle, and calls periperal clock cycle fns
 	++cpu->mcycles;
-	//if (cpu->cycles_left <= 0)
-		//fprintf(stderr, "cpu_cycle: cycles left already %d\n", cpu->cycles_left);
-	cpu->cycles_left = cpu->cycles_left > 0 ? cpu->cycles_left - 1 : 0;
+	--cpu->cycles_left;
 	timers_clock(cpu->timers);
 	//clock_cycle(cpu->clock);
 }
@@ -247,22 +245,18 @@ static
 void cpu_do_interrupt(struct cpu* cpu, int nr) {
 	mem_clear_interrupt_flag(cpu->mem, nr);
 	cpu->ime = false;
-	cpu->cycles_left = 4;
 	cpu->SP -= 2;
+	cpu_cycle(cpu);
+	cpu_cycle(cpu);
 	cpu_memwrite16_cycle(cpu, cpu->SP, cpu->PC);
 	cpu->PC = 0x040 + nr * 8;
+	cpu_cycle(cpu);
+	cpu->cycles_left = 0;
 }
 
-void cpu_clock_cycle(struct cpu* cpu) { // process 1 M-cycle
-	++cpu->mcycles;
-
+void cpu_run_instruction(struct cpu* cpu) { // process 1 M-cycle
 	if (cpu->stopped)
 		return; // TODO: 
-
-	if (cpu->cycles_left) {
-		--cpu->cycles_left;
-		return;
-	}
 
 	// check interrupt
 	if (cpu->ime || cpu->halted) {
@@ -278,31 +272,35 @@ void cpu_clock_cycle(struct cpu* cpu) { // process 1 M-cycle
 		}
 	}
 
-	if (cpu->halted)
+	if (cpu->halted) {
+		cpu_cycle(cpu);
 		return;
+	}
 
-	if (cpu->ei_initiated) { // EI instruction delay
+	if (cpu->ei_initiated) { // EI instruction delay TODO: Test this
 		cpu->ime = true;
 		cpu->ei_initiated = false;
 	}
 
 	// read next instruction
-	u16 opcode = mem_read(cpu->mem, cpu->PC) & 0x0FF; // expand width
+	u16 opcode = cpu_memread_cycle(cpu, cpu->PC) & 0x0FF; // expand width
 	// halt bug:
 	cpu->PC = cpu->haltbug ? cpu->PC : cpu->PC + 1;
 	cpu->haltbug = false;
 
 	bool prefix = opcode == OPCODE_PREFIX;
-	if (prefix) {
-		cpu_cycle(cpu);
-		opcode = mem_read(cpu->mem, cpu->PC++) & 0x0FF; // prefix: read next opcode
-	}
+	if (prefix)
+		opcode = cpu_memread_cycle(cpu, cpu->PC++) & 0x0FF; // prefix: read next opcode
 	struct instruction* instr = &opcode_lookup[opcode + (prefix ? 256 : 0)];
 	cpu->cycles_left = instr->cycles - 1; // -1 for this cycle itself
 	// For jumps/calls/rets, we correct in the instruction function when jump not taken
 
 	// call instr function from jump table
 	instr->func(cpu, instr);
+
+	while (cpu->cycles_left) {
+		cpu_cycle(cpu);
+	}
 }
 
 static

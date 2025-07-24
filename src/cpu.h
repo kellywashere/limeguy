@@ -79,7 +79,7 @@ struct instruction {
 struct cpu* cpu_create(struct mem* mem, struct timers* timers);
 void cpu_destroy(struct cpu* cpu);
 
-void cpu_clock_cycle(struct cpu* cpu);
+void cpu_run_instruction(struct cpu* cpu);
 bool cpu_is_stopped(struct cpu* cpu);
 
 void cpu_print_info(struct cpu* cpu);
