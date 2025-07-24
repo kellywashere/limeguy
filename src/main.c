@@ -5,8 +5,9 @@
 
 #include "rom.h"
 #include "mem.h"
-#include "cpu.h"
 #include "timers.h"
+#include "mcycle.h"
+#include "cpu.h"
 
 #define EXTRA_LOGGING
 
@@ -96,7 +97,8 @@ int main(int argc, char* argv[]) {
 	printf("Loaded ROM %s. Type: %02X\n", argv[argc-1], rom_get_type(rom));
 
 	struct timers* timers = timers_create(mem);
-	struct cpu* cpu = cpu_create(mem, timers);
+	struct mcycle* mcycle = mcycle_create(timers);
+	struct cpu* cpu = cpu_create(mem, mcycle);
 
 	bool break_hit = false;
 	bool done = false;

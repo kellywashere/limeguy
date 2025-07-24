@@ -52,7 +52,7 @@ struct cpu {
 	unsigned int cycles_left; // to keep track of instr cycles
 
 	struct mem*  mem;
-	struct timers* timers;
+	struct mcycle* mcycle;
 
 	bool halted;
 	bool haltbug;
@@ -76,7 +76,7 @@ struct instruction {
 };
 
 
-struct cpu* cpu_create(struct mem* mem, struct timers* timers);
+struct cpu* cpu_create(struct mem* mem, struct mcycle* mcycle);
 void cpu_destroy(struct cpu* cpu);
 
 void cpu_run_instruction(struct cpu* cpu);

@@ -13,7 +13,7 @@ struct timers {
 struct timers* timers_create(struct mem* mem);
 void timers_destroy(struct timers* timers);
 
-void timers_clock(struct timers* timers);
+void timers_mcycle(struct timers* timers);
 
 #endif
 

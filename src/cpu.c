@@ -3,10 +3,7 @@
 #include <string.h>
 #include "cpu.h"
 #include "mem.h"
-
-
-// TODO: Make clock.h/clock.c   CPU --> clock --> other peripherals
-#include "timers.h"
+#include "mcycle.h"
 
 #define OPCODE_PREFIX 0xCB
 
@@ -35,10 +32,10 @@ void cpu_init(struct cpu* cpu) {
 	cpu->stopped = false;
 }
 
-struct cpu* cpu_create(struct mem* mem, struct timers* timers) {
+struct cpu* cpu_create(struct mem* mem, struct mcycle* mcycle) {
 	struct cpu* cpu = malloc(sizeof(struct cpu));
 	cpu->mem = mem;
-	cpu->timers = timers;
+	cpu->mcycle = mcycle;
 	cpu_init(cpu);
 	return cpu;
 }
@@ -84,39 +81,38 @@ int cpu_get_operand_size(struct cpu* cpu, enum op_type tp) {
 
 // TODO: Move into cpu_clock_cycle fn
 static
-void cpu_cycle(struct cpu* cpu) {
+void cpu_mcycle(struct cpu* cpu) {
 // Adds one more clock cycle, and calls periperal clock cycle fns
 	++cpu->mcycles;
 	--cpu->cycles_left;
-	timers_clock(cpu->timers);
-	//clock_cycle(cpu->clock);
+	mcycle_tick(cpu->mcycle);
 }
 
 static
 i8 cpu_memread_cycle(struct cpu* cpu, u16 addr) {
-	cpu_cycle(cpu);
+	cpu_mcycle(cpu);
 	return mem_read(cpu->mem, addr);
 }
 
 static
 u16 cpu_memread16_cycle(struct cpu* cpu, u16 addr) {
-	cpu_cycle(cpu);
+	cpu_mcycle(cpu);
 	i8 lsbyte = mem_read(cpu->mem, addr++);
-	cpu_cycle(cpu);
+	cpu_mcycle(cpu);
 	i8 msbyte = mem_read(cpu->mem, addr);
 	return (((u16)msbyte) << 8) | ((u16)lsbyte & 0x0FF);
 }
 
 static
 void cpu_memwrite_cycle(struct cpu* cpu, u16 addr, i8 value) {
-	cpu_cycle(cpu);
+	cpu_mcycle(cpu);
 	mem_write(cpu->mem, addr, value);
 }
 
 void cpu_memwrite16_cycle(struct cpu* cpu, u16 addr, u16 value) {
-	cpu_cycle(cpu);
+	cpu_mcycle(cpu);
 	mem_write(cpu->mem, addr++, value & 0x00FF);
-	cpu_cycle(cpu);
+	cpu_mcycle(cpu);
 	mem_write(cpu->mem, addr, value >> 8);
 }
 
@@ -246,11 +242,11 @@ void cpu_do_interrupt(struct cpu* cpu, int nr) {
 	mem_clear_interrupt_flag(cpu->mem, nr);
 	cpu->ime = false;
 	cpu->SP -= 2;
-	cpu_cycle(cpu);
-	cpu_cycle(cpu);
+	cpu_mcycle(cpu);
+	cpu_mcycle(cpu);
 	cpu_memwrite16_cycle(cpu, cpu->SP, cpu->PC);
 	cpu->PC = 0x040 + nr * 8;
-	cpu_cycle(cpu);
+	cpu_mcycle(cpu);
 	cpu->cycles_left = 0;
 }
 
@@ -273,7 +269,7 @@ void cpu_run_instruction(struct cpu* cpu) { // process 1 M-cycle
 	}
 
 	if (cpu->halted) {
-		cpu_cycle(cpu);
+		cpu_mcycle(cpu);
 		return;
 	}
 
@@ -299,7 +295,7 @@ void cpu_run_instruction(struct cpu* cpu) { // process 1 M-cycle
 	instr->func(cpu, instr);
 
 	while (cpu->cycles_left) {
-		cpu_cycle(cpu);
+		cpu_mcycle(cpu);
 	}
 }
 

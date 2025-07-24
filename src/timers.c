@@ -21,7 +21,7 @@ void timers_destroy(struct timers* timers) {
 	free(timers);
 }
 
-void timers_clock(struct timers* timers) { // called every M-cycle = 4 T-cycles
+void timers_mcycle(struct timers* timers) { // called every M-cycle = 4 T-cycles
 	int clockselect_to_maxcount[4] = { 256, 4, 16, 64 };
 	
 	// DIV
