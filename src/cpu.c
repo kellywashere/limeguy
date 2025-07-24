@@ -75,7 +75,7 @@ void byte_to_flags(struct flags *f, i8 b) {
 }
 
 static
-int cpu_get_operand_size(struct cpu* cpu, enum op_type tp) {
+int cpu_get_operand_size(enum op_type tp) {
 	return ((REG_BC <= tp && tp <= REG_SP) || tp == IMM16) ? 16 : 8;
 }
 
@@ -424,7 +424,7 @@ static void ADD(struct cpu* cpu, struct instruction* instr) {
 		cpu->SP += op;
 		cpu->flags.Z = false;
 	}
-	else if (cpu_get_operand_size(cpu, instr->op1) == 16) {
+	else if (cpu_get_operand_size(instr->op1) == 16) {
 		u16 op = cpu_get_operand(cpu, instr->op2);
 		u16 target = cpu_get_operand(cpu, instr->op1); // HL or SP
 		cpu->flags.H = (target & 0x0FFF) + (op & 0x0FFF) > 0xFFF;
@@ -470,6 +470,7 @@ static void CALL(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void CCF(struct cpu* cpu, struct instruction* instr) {
+	(void)instr;
 	cpu->flags.N = false;
 	cpu->flags.H = false;
 	cpu->flags.C = !cpu->flags.C;
@@ -484,12 +485,14 @@ static void CP(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void CPL(struct cpu* cpu, struct instruction* instr) {
+	(void)instr;
 	cpu->flags.N = true;
 	cpu->flags.H = true;
 	cpu->regs[REG_A] = ~cpu->regs[REG_A];
 }
 
 static void DAA(struct cpu* cpu, struct instruction* instr) {
+	(void)instr;
 	// see: https://blog.ollien.com/posts/gb-daa/
     i8 offset = 0;
     u16 a = cpu->regs[REG_A] & 0x0FF; // force unsigned for cmp to 0x99
@@ -509,7 +512,7 @@ static void DAA(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void DEC(struct cpu* cpu, struct instruction* instr) {
-	if (cpu_get_operand_size(cpu, instr->op1) == 16) {
+	if (cpu_get_operand_size(instr->op1) == 16) {
 		cpu_set_operand(cpu, instr->op1, cpu_get_operand(cpu, instr->op1) - 1);
 	}
 	else {
@@ -523,21 +526,24 @@ static void DEC(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void DI(struct cpu* cpu, struct instruction* instr) {
+	(void)instr;
 	cpu->ime = false;
 }
 
 static void EI(struct cpu* cpu, struct instruction* instr) {
+	(void)instr;
 	cpu->ei_initiated = true;
 }
 
 static void HALT(struct cpu* cpu, struct instruction* instr) {
+	(void)instr;
 	cpu->halted = true;
  	 // HALT called when interrupts pending: read next byte @ PC twice:
 	cpu->haltbug = !cpu->ime && mem_get_active_interrupts(cpu->mem) != 0;
 }
 
 static void INC(struct cpu* cpu, struct instruction* instr) {
-	if (cpu_get_operand_size(cpu, instr->op1) == 16) {
+	if (cpu_get_operand_size(instr->op1) == 16) {
 		cpu_set_operand(cpu, instr->op1, cpu_get_operand(cpu, instr->op1) + 1);
 	}
 	else {
@@ -583,6 +589,8 @@ static void LDH(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void NOP(struct cpu* cpu, struct instruction* instr) {
+	(void)cpu;
+	(void)instr;
 }
 
 static void OR(struct cpu* cpu, struct instruction* instr) {
@@ -624,6 +632,7 @@ static void RET(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void RETI(struct cpu* cpu, struct instruction* instr) {
+	(void)instr;
 	cpu->ime = true;
 	cpu->PC = cpu_memread16_cycle(cpu, cpu->SP);
 	cpu->SP += 2;
@@ -641,6 +650,7 @@ static void RL(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void RLA(struct cpu* cpu, struct instruction* instr) {
+	(void)instr;
     u16 a = cpu->regs[REG_A] & 0x0FF; // expand width
 	a = (a << 1) | (cpu->flags.C ? 1 : 0);
 	cpu->regs[REG_A] = a & 0x0FF;
@@ -662,6 +672,7 @@ static void RLC(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void RLCA(struct cpu* cpu, struct instruction* instr) {
+	(void)instr;
     u16 a = cpu->regs[REG_A] & 0x0FF; // expand width
 	a <<= 1;
 	cpu->flags.C = (a & 0x100) == 0x100;
@@ -683,6 +694,7 @@ static void RR(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void RRA(struct cpu* cpu, struct instruction* instr) {
+	(void)instr;
     u16 a = cpu->regs[REG_A] & 0x0FF; // expand width
 	a |= cpu->flags.C ? 0x100 : 0;
 	cpu->flags.C = (a & 1) == 1;
@@ -703,6 +715,7 @@ static void RRC(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void RRCA(struct cpu* cpu, struct instruction* instr) {
+	(void)instr;
     u16 a = cpu->regs[REG_A] & 0x0FF; // expand width
 	cpu->flags.C = (a & 1) == 1;
 	cpu->regs[REG_A] = (a >> 1) | (cpu->flags.C ? 0x80 : 0);
@@ -728,6 +741,7 @@ static void SBC(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void SCF(struct cpu* cpu, struct instruction* instr) {
+	(void)instr;
 	cpu->flags.N = false;
 	cpu->flags.H = false;
 	cpu->flags.C = true;
@@ -771,6 +785,7 @@ static void SRL(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void STOP(struct cpu* cpu, struct instruction* instr) {
+	(void)instr;
 	printf("CPU: STOP instr at %04X\n", cpu->PC - 1);
 	cpu->stopped = true;
 }
@@ -803,9 +818,16 @@ static void XOR(struct cpu* cpu, struct instruction* instr) {
 	cpu->flags.C = false;
 }
 
-static void PREFIX(struct cpu* cpu, struct instruction* instr) { }
+static void PREFIX(struct cpu* cpu, struct instruction* instr) {
+	(void)cpu;
+	(void)instr;
+}
 
-static void ILLEGAL(struct cpu* cpu, struct instruction* instr) {printf("%s not implemented yet\n", instr->mnemonic);}
+static void ILLEGAL(struct cpu* cpu, struct instruction* instr) {
+	(void)cpu;
+	(void)instr;
+	printf("%s not implemented yet\n", instr->mnemonic);
+}
 
 
 #include "opcode_table.inc"

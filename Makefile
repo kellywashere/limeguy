@@ -5,8 +5,8 @@
 CC       = gcc
 # compiling flags here
 # Valgrind//debug:
-# CFLAGS   := -Wall -Wshadow -I. -std=gnu99
-CFLAGS   := -Wall -Wshadow -I. -std=gnu99 -g
+CFLAGS   := -Wall -Werror -Wextra -Wshadow -I. -O2 -std=gnu99
+# CFLAGS   := -Wall -Werror -Wextra -Wshadow -I. -std=gnu99 -g
 
 LINKER   = gcc
 # linking flags here

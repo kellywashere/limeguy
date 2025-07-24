@@ -57,7 +57,7 @@ struct mem* mem_create() {
 	// FF4D needs to return FF for cpu_instrs.gb to pass
 	for (int ii = 0; ii < IO_SIZE; ++ii)
 		mem->io[ii] = 0xFF; // see: https://www.reddit.com/r/EmuDev/comments/ipap0w/blarggs_cpu_tests_and_the_stop_instruction/
-	for (int ii = 0; ii < sizeof(io_init_dmg0) / sizeof(io_init_dmg0[0]); ++ii)
+	for (unsigned int ii = 0; ii < sizeof(io_init_dmg0) / sizeof(io_init_dmg0[0]); ++ii)
 		mem->io[io_init_dmg0[ii].offset] = io_init_dmg0[ii].val;
 	mem->ie = 0;
 
