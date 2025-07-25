@@ -30,6 +30,10 @@ void cpu_init(struct cpu* cpu) {
 	cpu->halted = false;
 	cpu->haltbug = false;
 	cpu->stopped = false;
+
+	cpu->mcycles = 0;
+	for (int ii = 0; ii < 5; ++ii)
+		cpu->interrupt_count[ii] = 0;
 }
 
 struct cpu* cpu_create(struct mem* mem, struct mcycle* mcycle) {
@@ -240,6 +244,7 @@ bool cpu_check_cond(struct cpu* cpu, enum op_type tp) {
 
 static
 void cpu_do_interrupt(struct cpu* cpu, int nr) {
+	++cpu->interrupt_count[nr];
 	mem_clear_interrupt_flag(cpu->mem, nr);
 	cpu->ime = false;
 	cpu->SP -= 2;
@@ -258,7 +263,7 @@ void cpu_run_instruction(struct cpu* cpu) { // process 1 M-cycle
 	// check interrupt
 	if (cpu->ime || cpu->halted) {
 		u16 interrupts = mem_get_active_interrupts(cpu->mem);
-		for (int bitnr = 0; interrupts != 0 && bitnr <= 4; ++bitnr) {
+		for (int bitnr = 0; interrupts != 0 && bitnr < 5; ++bitnr) {
 			if (interrupts & (1 << bitnr)) {
 				cpu->halted = false;
 				if (cpu->ime) {

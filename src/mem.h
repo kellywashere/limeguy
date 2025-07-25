@@ -34,8 +34,9 @@ void mem_clear_interrupt_flag(struct mem* mem, int nr);
 bool mem_is_cpu_double_speed(struct mem* mem);
 
 // Timer interace
-void mem_divtimer_inc(struct mem* mem);
-void mem_tima_inc(struct mem* mem);
+u8 mem_timers_get_tac(struct mem* mem);
+void mem_timers_div_inc(struct mem* mem);
+void mem_timers_tima_inc(struct mem* mem);
 
 // PPU interface
 void mem_ppu_report(struct mem* mem, int ly, int mode);

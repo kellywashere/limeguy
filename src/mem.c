@@ -105,7 +105,7 @@ u8 mem_read(struct mem* mem, u16 addr) {
 		u8 io_idx = addr & 0xFF;
 	
 		// FIXME: this is a hack to pass gb doctor
-		//if (io_idx == 0x44) return 0x90;
+		//if (io_idx == IO_LY) return 0x90;
 
 		return mem->io[io_idx]; // TODO
 	}
@@ -184,12 +184,16 @@ bool mem_is_cpu_double_speed(struct mem* mem) {
 	return false;
 }
 
-void mem_divtimer_inc(struct mem* mem) {
+u8 mem_timers_get_tac(struct mem* mem) {
+	return mem->io[IO_TAC] & 0x07;
+}
+
+void mem_timers_div_inc(struct mem* mem) {
 	++mem->io[IO_DIV];
 }
 
-void mem_tima_inc(struct mem* mem) {
-	u16 newtima = (mem->io[IO_TIMA] & 0x0FF) + 1;
+void mem_timers_tima_inc(struct mem* mem) {
+	u16 newtima = (u16)mem->io[IO_TIMA] + 1;
 	if (newtima == 256) { // overflow
 		mem->io[IO_TIMA] = mem->io[IO_TMA];
 		mem_set_interrupt_flag(mem, INTR_TIMER);
@@ -205,7 +209,7 @@ void mem_ppu_report(struct mem* mem, int ly, int mode){
 	int ly_prev = mem->io[IO_LY];
 
 	// previous output of interrupt OR
-	bool mode_match_prev = (stat_prev & (1 << (mode_prev + 3))) != 0; // modexintsel & modebit
+	bool mode_match_prev = mode_prev != 3 && (stat_prev & (1 << (mode_prev + 3))) != 0; // modexintsel & modebit
 	bool lyc_match_prev = ((stat_prev >> 2) & (stat_prev >> 6) & 1) != 0;  //LYCintsel & LYC==LY
 	bool or_prev = mode_match_prev || lyc_match_prev;
 
@@ -215,7 +219,7 @@ void mem_ppu_report(struct mem* mem, int ly, int mode){
 	mem->io[IO_STAT] = stat;
 	
 	// new output of interrupt OR
-	bool mode_match = (stat & (1 << (mode + 3))) != 0;
+	bool mode_match = mode != 3 && (stat & (1 << (mode + 3))) != 0; // modexintsel & modebit
 	bool lyc_match = ((stat >> 2) & (stat >> 6) & 1) != 0;
 	bool or = mode_match || lyc_match;
 	

@@ -62,6 +62,7 @@ struct cpu {
 
 	// DEBUG
 	int mcycles;
+	int interrupt_count[5]; // FIXME: remove
 };
 
 typedef void instr_fn(struct cpu* cpu, struct instruction* instr); // instruction function type

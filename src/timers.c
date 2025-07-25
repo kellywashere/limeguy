@@ -28,15 +28,15 @@ void timers_mcycle(struct timers* timers) { // called every M-cycle = 4 T-cycles
 	++timers->count_div;
 	if (timers->count_div >= DIVCOUNT) {
 		timers->count_div = 0;
-		mem_divtimer_inc(timers->mem); // Also takes care of interrupt flag on overflow
+		mem_timers_div_inc(timers->mem); // Also takes care of interrupt flag on overflow
 	}
 
-	u8 tac = mem_read(timers->mem, TAC) & 0x07; // TODO: Add interface like for ppu for faster access
+	u8 tac = mem_timers_get_tac(timers->mem);
 	if (tac >> 2) { // enbl
 		++timers->count_tima;
 		if (timers->count_tima >= clockselect_to_maxcount[tac & 0x03]) {
 			timers->count_tima = 0;
-			mem_tima_inc(timers->mem); // also takes care of overflow + interrupt flags
+			mem_timers_tima_inc(timers->mem); // also takes care of overflow + interrupt flags
 		}
 	}
 }

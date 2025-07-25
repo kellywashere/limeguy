@@ -16,6 +16,7 @@
 int break_instrnr = 0; // see usage
 int break_addr = -1;
 int max_instr = 0;
+int max_mcycles = 0;
 int start_logging_instrnr = 0;
 
 void print_state_gbdoctor(struct cpu* cpu, FILE* logfile) {
@@ -48,12 +49,13 @@ int main(int argc, char* argv[]) {
 	FILE* logfile = NULL;
 
 	if (argc <= 1) {
-		printf("Usage: %s [[b]addr_hex] [[i]instr#] [lLogfile] [sinstr#] [m????] <romfile>\n", argv[0]);
+		printf("Usage: %s [[b]addr_hex] [[i]instr#] [lLogfile] [sinstr#] [m????] [M????] <romfile>\n", argv[0]);
 		printf("  b option: breakpoint at address (default: $0100)\n");
 		printf("  i option: breakpoint at from instr# (default: 1)\n");
-		printf("  l option: game boy doctor output enable (status line after eaach instr)\n");
+		printf("  l option: game boy doctor output enable (status line after each instr)\n");
 		printf("  s option: start logging from instr$ given\n");
-		printf("  m option: max #instructions to run\n");
+		printf("  m option: max # instructions to run\n");
+		printf("  M option: max # Mcycles to run\n");
 		printf("---\n");
 		printf("When in step-by-step mode:\n");
 		printf("  q: exit program\n");
@@ -89,6 +91,8 @@ int main(int argc, char* argv[]) {
 		}
 		else if (argv[ii][0] == 'm')
 			max_instr = atoi(argv[ii] + 1);
+		else if (argv[ii][0] == 'M')
+			max_mcycles = atoi(argv[ii] + 1);
 	}
 
 	// Set up game boy hardware
@@ -100,7 +104,7 @@ int main(int argc, char* argv[]) {
 
 	struct timers* timers = timers_create(mem);
 	struct ppu* ppu = ppu_create(mem);
-	//struct ppu* ppu = NULL;
+	// struct ppu* ppu = NULL;
 
 	struct mcycle* mcycle = mcycle_create(timers, ppu);
 	struct cpu* cpu = cpu_create(mem, mcycle);
@@ -116,7 +120,7 @@ int main(int argc, char* argv[]) {
 
 		if (logfile && nr_instr_ran + 1 >= start_logging_instrnr) {
 #ifdef EXTRA_LOGGING
-			fprintf(logfile, "%8u %d ", nr_instr_ran + 1, cpu->mcycles);
+			fprintf(logfile, "%8u ", nr_instr_ran + 1);
 			if (ppu)
 				fprintf(logfile, "%d,%d,%d ", ppu->xdot, ppu->ly, ppu->mode);
 #endif
@@ -127,8 +131,9 @@ int main(int argc, char* argv[]) {
 			break_hit = true;
 		if (break_addr >= 0 && cpu->PC == break_addr)
 			break_hit = true;
-		if (mem->io[0x03] && cpu->PC >= 0xC000)
+		if (mem->io[0x03])
 			break_hit = true;
+		// TODO: break on LD B,B
 
 		if (break_hit) {
 			printf("\nInstr #: %u\n", nr_instr_ran + 1);
@@ -159,7 +164,7 @@ int main(int argc, char* argv[]) {
 		cpu_run_instruction(cpu);
 
 		++nr_instr_ran;
-		if (nr_instr_ran == max_instr)
+		if (nr_instr_ran == max_instr || (max_mcycles && cpu->mcycles >= max_mcycles))
 			done = true;
 	}
 
@@ -167,7 +172,14 @@ int main(int argc, char* argv[]) {
 	double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;
 
 	printf("Instructions executed: %d\n", nr_instr_ran);
+	printf("M-cycles: %d; T-cycles: %d\n", cpu->mcycles, 4 * cpu->mcycles);
 	printf("Clock speed: %4.3f MHz (T-cycles / sec)\n", ((double)(4 * cpu->mcycles)) / elapsed_time / 1.0e6);
+	printf("Interrupt count:\n");
+	printf("  Vblank: %d\n", cpu->interrupt_count[0]);
+	printf("  LCD:    %d\n", cpu->interrupt_count[1]);
+	printf("  Timer:  %d\n", cpu->interrupt_count[2]);
+	printf("  Serial: %d\n", cpu->interrupt_count[3]);
+	printf("  Joypad: %d\n", cpu->interrupt_count[4]);
 
 	if (logfile)
 		fclose(logfile);
