@@ -38,11 +38,6 @@ void mem_divtimer_inc(struct mem* mem);
 void mem_tima_inc(struct mem* mem);
 
 // PPU interface
-/*
-void mem_ppu_report_ly(struct mem* mem, int ly);
-u8 mem_ppu_get_stat(struct mem* mem);
-int mem_ppu_get_lycmp(struct mem* mem);
-void mem_ppu_set_stat(struct mem* mem, u8 stat);
-*/
+void mem_ppu_report(struct mem* mem, int ly, int mode);
 
 #endif

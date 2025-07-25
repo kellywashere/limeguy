@@ -25,6 +25,9 @@
 #define IO_TMA  0x06 /* Timer modulo */
 #define IO_TAC  0x07 /* Timer control */
 #define IO_IF   0x0F /* interrupt flag */
+#define IO_STAT 0x41 /* LCD status */
+#define IO_LY   0x44 /* LCD LY */
+#define IO_LYC  0x45 /* LY cmp */
 
 #define HIRAM_START   0xFF80
 #define HIRAM_SIZE    0x7F
@@ -36,6 +39,8 @@
 #define INTR_TIMER  2
 #define INTR_SERIAL 3
 #define INTR_JOYPAD 4
+
+#define LY_VBLANK    144
 
 
 
@@ -100,7 +105,7 @@ u8 mem_read(struct mem* mem, u16 addr) {
 		u8 io_idx = addr & 0xFF;
 	
 		// FIXME: this is a hack to pass gb doctor
-		if (io_idx == 0x44) return 0x90;
+		//if (io_idx == 0x44) return 0x90;
 
 		return mem->io[io_idx]; // TODO
 	}
@@ -130,23 +135,24 @@ void mem_write(struct mem* mem, u16 addr, u8 value) {
 		mem->oam[addr & 0xFF] = value;
 	}
 	else if (addr >= IO_START && addr < (IO_START + IO_SIZE)) { // IO operation
-		u16 io_idx = addr & 0xFF;
-		mem->io[io_idx] = value;
+		u8 io_idx = addr & 0xFF;
 		switch (io_idx) {
+			case IO_LY: // read only
+				break;
+			case IO_STAT:
+				mem->io[io_idx] = value & 0xF8; // 3 lsb are read only
+				break;
 			case IO_SC: // Serial out
 				if (value == 0x81) {
 					printf("%c", mem->io[IO_SB]);
 					mem->io[io_idx] = 0;
-					/*
-					//DEBUG TODO: Remove
-					if ((mem->io[IO_SB] & 0x0FF) == '3')
-						mem->io[IO_UNUSED] = 1; // break
-					*/
 				}
 				break;
 			case IO_DIV:
 				mem->io[io_idx] = 0;
 				break;
+			default:
+				mem->io[io_idx] = value;
 		}
 	}
 	else if (addr == INTERRUPT_ENABLE)
@@ -190,5 +196,32 @@ void mem_tima_inc(struct mem* mem) {
 	}
 	else
 		mem->io[IO_TIMA] = newtima & 0x0FF;
+}
+
+void mem_ppu_report(struct mem* mem, int ly, int mode){
+	// TODO: Spurious STAT interrupt: https://gbdev.io/pandocs/STAT.html#spurious-stat-interrupts
+	u8 stat_prev = mem->io[IO_STAT];
+	int mode_prev = stat_prev & 0x3;
+	int ly_prev = mem->io[IO_LY];
+
+	// previous output of interrupt OR
+	bool mode_match_prev = (stat_prev & (1 << (mode_prev + 3))) != 0; // modexintsel & modebit
+	bool lyc_match_prev = ((stat_prev >> 2) & (stat_prev >> 6) & 1) != 0;  //LYCintsel & LYC==LY
+	bool or_prev = mode_match_prev || lyc_match_prev;
+
+	mem->io[IO_LY] = ly;
+
+	u8 stat = (stat_prev & 0xF8) | (ly == mem->io[IO_LYC] ? 4 : 0) | mode;
+	mem->io[IO_STAT] = stat;
+	
+	// new output of interrupt OR
+	bool mode_match = (stat & (1 << (mode + 3))) != 0;
+	bool lyc_match = ((stat >> 2) & (stat >> 6) & 1) != 0;
+	bool or = mode_match || lyc_match;
+	
+	if (ly_prev < LY_VBLANK && ly >= LY_VBLANK)
+		mem_set_interrupt_flag(mem, INTR_VBLANK);
+	if (!or_prev && or)
+		mem_set_interrupt_flag(mem, INTR_LCD);
 }
 

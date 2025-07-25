@@ -8,6 +8,7 @@
 #include "timers.h"
 #include "mcycle.h"
 #include "cpu.h"
+#include "ppu.h"
 
 #define EXTRA_LOGGING
 
@@ -90,6 +91,7 @@ int main(int argc, char* argv[]) {
 			max_instr = atoi(argv[ii] + 1);
 	}
 
+	// Set up game boy hardware
 	struct rom* rom = rom_create(argv[argc - 1]);
 	if (!rom->data)
 		return 2;
@@ -97,8 +99,12 @@ int main(int argc, char* argv[]) {
 	printf("Loaded ROM %s. Type: %02X\n", argv[argc-1], rom_get_type(rom));
 
 	struct timers* timers = timers_create(mem);
-	struct mcycle* mcycle = mcycle_create(timers);
+	struct ppu* ppu = ppu_create(mem);
+	//struct ppu* ppu = NULL;
+
+	struct mcycle* mcycle = mcycle_create(timers, ppu);
 	struct cpu* cpu = cpu_create(mem, mcycle);
+
 
 	bool break_hit = false;
 	bool done = false;
@@ -111,6 +117,8 @@ int main(int argc, char* argv[]) {
 		if (logfile && nr_instr_ran + 1 >= start_logging_instrnr) {
 #ifdef EXTRA_LOGGING
 			fprintf(logfile, "%8u %d ", nr_instr_ran + 1, cpu->mcycles);
+			if (ppu)
+				fprintf(logfile, "%d,%d,%d ", ppu->xdot, ppu->ly, ppu->mode);
 #endif
 			print_state_gbdoctor(cpu, logfile);
 		}
@@ -164,6 +172,7 @@ int main(int argc, char* argv[]) {
 	if (logfile)
 		fclose(logfile);
 
+	ppu_destroy(ppu);
 	timers_destroy(timers);
 	cpu_destroy(cpu);
 	rom_destroy(rom);

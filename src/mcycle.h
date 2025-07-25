@@ -7,10 +7,10 @@
 
 struct mcycle {
 	struct timers* timers;
-	//struct ppu* ppu;
+	struct ppu*    ppu;
 };
 
-struct mcycle* mcycle_create(struct timers* timers);
+struct mcycle* mcycle_create(struct timers* timers, struct ppu* ppu);
 void mcycle_destroy(struct mcycle* mcycle);
 
 void mcycle_tick(struct mcycle* mcycle);
