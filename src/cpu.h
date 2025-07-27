@@ -5,7 +5,7 @@
 #include <stdbool.h>
 
 #include "mem.h"
-#include "typedefs.h"
+#include "common.h"
 
 #define NR_REGS 7
 
@@ -60,9 +60,10 @@ struct cpu {
 	bool stopped;
 
 
-	// DEBUG
-	int mcycles;
-	int interrupt_count[5]; // FIXME: remove
+	// FIXME: DEBUG VARS
+	int nr_mcycles;
+	int nr_instructions;
+	int interrupt_count[5];
 };
 
 typedef void instr_fn(struct cpu* cpu, struct instruction* instr); // instruction function type

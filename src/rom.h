@@ -2,7 +2,7 @@
 #define __ROM_H__
 
 #include <stddef.h>
-#include "typedefs.h"
+#include "common.h"
 
 struct rom {
 	u8*          data;

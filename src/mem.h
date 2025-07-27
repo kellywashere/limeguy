@@ -2,7 +2,7 @@
 #define __MEM_H__
 
 #include <stdbool.h>
-#include "typedefs.h"
+#include "common.h"
 #include "rom.h"
 
 // mem takes care of memory mapping
@@ -14,6 +14,8 @@ struct mem {
 	u8          io[0x80];
 	u8          hiram[0x7F];
 	u8          ie; // IE interrupt enbl flags. Note: IF is at io[0x0F]
+
+	//gb_color*   tiles; // For pre-decoded tiles
 };
 
 struct mem* mem_create();
@@ -40,5 +42,10 @@ void mem_timers_tima_inc(struct mem* mem);
 
 // PPU interface
 void mem_ppu_report(struct mem* mem, int ly, int mode);
+void mem_ppu_get_scroll(struct mem* mem, u8* scx, u8* scy);
+u8 mem_ppu_get_lcdc(struct mem* mem);
+int mem_ppu_get_tileidx_from_tilemap(struct mem* mem, int tm_idx);
+void mem_ppu_copy_tile_row(struct mem* mem, gb_color_idx* dest, int tile_idx_eff, int tile_row);
+void mem_ppu_get_bg_palette(struct mem* mem, gb_color palette[4]);
 
 #endif

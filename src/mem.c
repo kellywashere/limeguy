@@ -1,9 +1,12 @@
+// TODO: VRAM access depending on PPU state
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include "mem.h"
 
 #define VRAM          0x8000
+#define TILEDATA      0x8000
+#define TILEMAP       0x9800
 
 #define ECHO_RAM      0xE000
 #define ECHO_RAM_SIZE 0x1E00
@@ -25,9 +28,13 @@
 #define IO_TMA  0x06 /* Timer modulo */
 #define IO_TAC  0x07 /* Timer control */
 #define IO_IF   0x0F /* interrupt flag */
+#define IO_LCDC 0x40 /* LCD Control */
 #define IO_STAT 0x41 /* LCD status */
+#define IO_SCY  0x42 /* Y scroll */
+#define IO_SCX  0x43 /* X scroll */
 #define IO_LY   0x44 /* LCD LY */
 #define IO_LYC  0x45 /* LY cmp */
+#define IO_BGP  0x47 /* BG Palette */
 
 #define HIRAM_START   0xFF80
 #define HIRAM_SIZE    0x7F
@@ -40,9 +47,7 @@
 #define INTR_SERIAL 3
 #define INTR_JOYPAD 4
 
-#define LY_VBLANK    144
-
-
+#define LY_VBLANK   144 /* needed here for vbalnk interrupt */
 
 // DEBUG
 #define IO_UNUSED 0x03 /* if non-zero: breakpoint */
@@ -54,13 +59,21 @@ struct io_init {
 
 #include "io_init.inc" // defines table io_init_dmg0[] 
 
-struct mem* mem_create() {
-	struct mem* mem = malloc(sizeof(struct mem));
-	mem->rom = NULL;
-	mem->ram = malloc(32 * 1024);
+#define NR_TILES          384
 
-	// Init vals
-	// FF4D needs to return FF for cpu_instrs.gb to pass
+#define RAM_RESERVED      (32*1024)
+//Next line is for when tiles are pre-computed, see note at mem_ppu_copy_tile_row
+//#define TILEDATA_RESERVED (NR_TILES * 8 * 8)
+
+struct mem* mem_create() {
+	// reverve one piece of mem for all (avoid many mallocs)
+	struct mem* mem = malloc(sizeof(struct mem) + RAM_RESERVED/* + TILEDATA_RESERVED */);
+	mem->rom = NULL;
+	mem->ram = (u8*)((void*)mem + sizeof(struct mem)); // ram follows struct directly
+	//mem->tiles = (u8*)((void*)mem->ram + RAM_RESERVED); // for "pre-decoded" tiles
+
+	// Init IO vals
+	// 0xFF4D needs to return FF for cpu_instrs.gb to pass
 	for (int ii = 0; ii < IO_SIZE; ++ii)
 		mem->io[ii] = 0xFF; // see: https://www.reddit.com/r/EmuDev/comments/ipap0w/blarggs_cpu_tests_and_the_stop_instruction/
 	for (unsigned int ii = 0; ii < sizeof(io_init_dmg0) / sizeof(io_init_dmg0[0]); ++ii)
@@ -74,11 +87,7 @@ struct mem* mem_create() {
 }
 
 void mem_destroy(struct mem* mem) {
-	if (mem) {
-		// TODO: destroy rom ?
-		free(mem->ram);
-		free(mem);
-	}
+	free(mem);
 }
 
 void mem_connect_rom(struct mem* mem, struct rom* rom) {
@@ -188,11 +197,14 @@ u8 mem_timers_get_tac(struct mem* mem) {
 	return mem->io[IO_TAC] & 0x07;
 }
 
+
 void mem_timers_div_inc(struct mem* mem) {
+	// TODO: Putting this fn in mem in stead of timers is hacky. Move to timers !
 	++mem->io[IO_DIV];
 }
 
 void mem_timers_tima_inc(struct mem* mem) {
+	// TODO: Putting this fn in mem in stead of timers is hacky. Move to timers !
 	u16 newtima = (u16)mem->io[IO_TIMA] + 1;
 	if (newtima == 256) { // overflow
 		mem->io[IO_TIMA] = mem->io[IO_TMA];
@@ -202,8 +214,11 @@ void mem_timers_tima_inc(struct mem* mem) {
 		mem->io[IO_TIMA] = newtima & 0x0FF;
 }
 
+
 void mem_ppu_report(struct mem* mem, int ly, int mode){
 	// TODO: Spurious STAT interrupt: https://gbdev.io/pandocs/STAT.html#spurious-stat-interrupts
+
+	// TODO: Putting this fn in mem in stead of PPU is hacky. Move to PPU !
 	u8 stat_prev = mem->io[IO_STAT];
 	int mode_prev = stat_prev & 0x3;
 	int ly_prev = mem->io[IO_LY];
@@ -229,3 +244,42 @@ void mem_ppu_report(struct mem* mem, int ly, int mode){
 		mem_set_interrupt_flag(mem, INTR_LCD);
 }
 
+u8 mem_ppu_get_lcdc(struct mem* mem) {
+	return mem->io[IO_LCDC];
+}
+
+void mem_ppu_get_scroll(struct mem* mem, u8* scx, u8* scy) {
+	*scx = mem->io[IO_SCX];
+	*scy = mem->io[IO_SCY];
+}
+
+int mem_ppu_get_tileidx_from_tilemap(struct mem* mem, int tm_idx) {
+	// tm_idx already contains the offset created by LCDC.3
+	return mem->ram[(TILEMAP - VRAM) + tm_idx];
+}
+
+// TODO: Try possible speed-up:
+// Draw all tiles in mem (array of tiles).
+// Update tile when VRAM tile data changes.
+// Copy from there directly.
+void mem_ppu_copy_tile_row(struct mem* mem, gb_color_idx* dest, int tile_idx_eff, int tile_row) {
+	// tile_idx_eff: 0 .. 383 (LCDC.5 already processed)
+	// tile_row: 0 .. 7
+	u16 vram_addr = tile_idx_eff * 16 + tile_row * 2;
+	u8 row_lsb = mem->ram[vram_addr];
+	u8 row_msb = mem->ram[vram_addr + 1];
+	for (int b = 0; b < 8; ++b) {
+		gb_color_idx col_idx = ((row_msb & 1) << 1) | (row_lsb & 1);
+		dest[7 - b] = col_idx;
+		row_msb >>= 1;
+		row_lsb >>= 1;
+	}
+}
+
+void mem_ppu_get_bg_palette(struct mem* mem, gb_color palette[4]) {
+	int bgp = mem->io[IO_BGP];
+	for (int ii = 0; ii < 4; ++ii) {
+		palette[ii] = bgp & 0x3;
+		bgp >>= 2;
+	}
+}

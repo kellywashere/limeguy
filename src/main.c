@@ -1,7 +1,11 @@
+// TODO: Clean this up: introduce gameboy.h (gameboy "object")
+// TODO: move to more traditional style of cmd line arguments
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <ctype.h>
+
+#include <raylib.h>
 
 #include "rom.h"
 #include "mem.h"
@@ -12,7 +16,8 @@
 
 #define EXTRA_LOGGING
 
-// usage parameters
+// cmd line params
+char* logfile_name = NULL;
 int break_instrnr = 0; // see usage
 int break_addr = -1;
 int max_instr = 0;
@@ -45,28 +50,23 @@ void print_state_gbdoctor(struct cpu* cpu, FILE* logfile) {
 #endif
 }
 
-int main(int argc, char* argv[]) {
-	FILE* logfile = NULL;
+void print_usage(char* progname) {
+	printf("Usage: %s [[b]addr_hex] [[i]instr#] [lLogfile] [sinstr#] [m????] [M????] <romfile>\n", progname);
+	printf("  b option: breakpoint at address (default: $0100)\n");
+	printf("  i option: breakpoint at from instr# (default: 1)\n");
+	printf("  l option: game boy doctor output enable (status line after each instr)\n");
+	printf("  s option: start logging from instr$ given\n");
+	printf("  m option: max # instructions to run\n");
+	printf("  M option: max # Mcycles to run\n");
+	printf("---\n");
+	printf("When in step-by-step mode:\n");
+	printf("  q: exit program\n");
+	printf("  c: continue (exit step-by-step mode)\n");
+	printf("  dAddr_hex: display data at address addr_hex\n");
+	printf("  lLogfile: start logging a la game boy doctor\n");
+}
 
-	if (argc <= 1) {
-		printf("Usage: %s [[b]addr_hex] [[i]instr#] [lLogfile] [sinstr#] [m????] [M????] <romfile>\n", argv[0]);
-		printf("  b option: breakpoint at address (default: $0100)\n");
-		printf("  i option: breakpoint at from instr# (default: 1)\n");
-		printf("  l option: game boy doctor output enable (status line after each instr)\n");
-		printf("  s option: start logging from instr$ given\n");
-		printf("  m option: max # instructions to run\n");
-		printf("  M option: max # Mcycles to run\n");
-		printf("---\n");
-		printf("When in step-by-step mode:\n");
-		printf("  q: exit program\n");
-		printf("  c: continue (exit step-by-step mode)\n");
-		printf("  dAddr_hex: display data at address addr_hex\n");
-		printf("  lLogfile: start logging a la game boy doctor\n");
-		return 1;
-	}
-
-	struct mem* mem = mem_create();
-
+void parse_arguments(int argc, char* argv[]) { // uses globals for now
 	// Parse args
 	for (int ii = 1; ii < argc - 1; ++ii) {
 		if (argv[ii][0] == 'i') {
@@ -81,9 +81,7 @@ int main(int argc, char* argv[]) {
 			printf("Breakpoint at address $%04X\n", break_addr);
 		}
 		else if (argv[ii][0] == 'l') {
-			logfile = fopen(argv[ii] + 1, "w");
-			if (!logfile)
-				fprintf(stderr, "Error: could not open log file %s\n", argv[ii] + 1);
+			logfile_name = argv[ii] + 1; // hacky
 		}
 		if (argv[ii][0] == 's') {
 			if (isdigit(argv[ii][1]))
@@ -94,8 +92,26 @@ int main(int argc, char* argv[]) {
 		else if (argv[ii][0] == 'M')
 			max_mcycles = atoi(argv[ii] + 1);
 	}
+}
+
+int main(int argc, char* argv[]) {
+	FILE* logfile = NULL;
+
+	if (argc <= 1) {
+		print_usage(argv[0]);
+		return 1;
+	}
+
+	parse_arguments(argc, argv);
+	if (logfile_name != NULL) {
+		logfile = fopen(logfile_name, "w");
+		if (!logfile)
+			fprintf(stderr, "Error: could not open log file %s\n", logfile_name);
+	}
 
 	// Set up game boy hardware
+	struct mem* mem = mem_create();
+
 	struct rom* rom = rom_create(argv[argc - 1]);
 	if (!rom->data)
 		return 2;
@@ -109,13 +125,13 @@ int main(int argc, char* argv[]) {
 	struct mcycle* mcycle = mcycle_create(timers, ppu);
 	struct cpu* cpu = cpu_create(mem, mcycle);
 
-
 	bool break_hit = false;
 	bool done = false;
 	int nr_instr_ran = 0;
 
 	clock_t start = clock();
 
+	// instruction loop
 	while (!done && !cpu_is_stopped(cpu)) {
 
 		if (logfile && nr_instr_ran + 1 >= start_logging_instrnr) {
@@ -127,13 +143,14 @@ int main(int argc, char* argv[]) {
 			print_state_gbdoctor(cpu, logfile);
 		}
 
+		// break point conditions
 		if (break_instrnr > 0 && nr_instr_ran + 1 == break_instrnr)
 			break_hit = true;
 		if (break_addr >= 0 && cpu->PC == break_addr)
 			break_hit = true;
-		if (mem->io[0x03])
+		if (mem->io[0x03]) // unused IO addr used as break
 			break_hit = true;
-		// TODO: break on LD B,B
+		// TODO: break on LD B,B (mooneye test suite)
 
 		if (break_hit) {
 			printf("\nInstr #: %u\n", nr_instr_ran + 1);
@@ -141,7 +158,7 @@ int main(int argc, char* argv[]) {
 			char buf[80];
 			fgets(buf, 80, stdin);
 			if (buf[0] == 'q')
-				done = true;
+				done = true; // causes program to exit
 			else if (buf[0] == 'c')
 				break_hit = false;
 			else if (buf[0] == 'd') {
@@ -154,7 +171,7 @@ int main(int argc, char* argv[]) {
 				while (*bb && *bb != '\n')
 					++bb;
 				*bb = '\0';
-				break_hit = false;
+				break_hit = false; // continue execution normally
 				logfile = fopen(buf + 1, "w");
 				if (!logfile)
 					fprintf(stderr, "Error: could not open log file %s\n", buf + 1);
@@ -164,16 +181,19 @@ int main(int argc, char* argv[]) {
 		cpu_run_instruction(cpu);
 
 		++nr_instr_ran;
-		if (nr_instr_ran == max_instr || (max_mcycles && cpu->mcycles >= max_mcycles))
+
+		// exit conditions
+		if (nr_instr_ran == max_instr || (max_mcycles && cpu->nr_mcycles >= max_mcycles))
 			done = true;
 	}
 
 	clock_t end = clock();
 	double elapsed_time = (double)(end - start) / CLOCKS_PER_SEC;
 
+	// print execution / debug summary
 	printf("Instructions executed: %d\n", nr_instr_ran);
-	printf("M-cycles: %d; T-cycles: %d\n", cpu->mcycles, 4 * cpu->mcycles);
-	printf("Clock speed: %4.3f MHz (T-cycles / sec)\n", ((double)(4 * cpu->mcycles)) / elapsed_time / 1.0e6);
+	printf("M-cycles: %d; T-cycles: %d\n", cpu->nr_mcycles, 4 * cpu->nr_mcycles);
+	printf("Clock speed: %4.3f MHz (T-cycles / sec)\n", ((double)(4 * cpu->nr_mcycles)) / elapsed_time / 1.0e6);
 	printf("Interrupt count:\n");
 	printf("  Vblank: %d\n", cpu->interrupt_count[0]);
 	printf("  LCD:    %d\n", cpu->interrupt_count[1]);
@@ -184,6 +204,7 @@ int main(int argc, char* argv[]) {
 	if (logfile)
 		fclose(logfile);
 
+	// clean-up
 	ppu_destroy(ppu);
 	timers_destroy(timers);
 	cpu_destroy(cpu);

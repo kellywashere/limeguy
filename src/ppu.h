@@ -1,6 +1,16 @@
 #ifndef __PPU_H__
 #define __PPU_H__
 
+#include <stdbool.h>
+#include <stdint.h>
+#include "common.h"
+
+#define LCD_WIDTH 160
+#define LCD_HEIGHT 144
+
+// LCD color code when screen off (5th color)
+#define COLOR_LCD_OFF 0x4
+
 enum mode {
 	PPU_MODE_HBLANK  = 0,
 	PPU_MODE_VBLANK  = 1,
@@ -10,15 +20,24 @@ enum mode {
 
 struct ppu {
 	struct mem* mem;
+	bool        enabled;
 	int         xdot; // 0 .. 455
 	int         ly;   // 0 .. 153
 	enum mode   mode;
+
+	gb_color    lcd[LCD_WIDTH * LCD_HEIGHT];
+
+	// helper
+	int last_line_rendered;
 };
 
 struct ppu* ppu_create(struct mem* mem);
 void ppu_destroy(struct ppu* ppu);
 
 void ppu_mcycle(struct ppu* ppu);
+
+// rgba_palette order: lcd col 0, lcd col 1, lcd col 2, lcd col 3, off color
+void ppu_lcd_to_rgba(struct ppu* ppu, u8* pixels, int pixw, int pixh, struct limeguy_color rgba_palette[5]);
 
 #endif
 

@@ -31,7 +31,8 @@ void cpu_init(struct cpu* cpu) {
 	cpu->haltbug = false;
 	cpu->stopped = false;
 
-	cpu->mcycles = 0;
+	cpu->nr_mcycles = 0;
+	cpu->nr_instructions = 0;
 	for (int ii = 0; ii < 5; ++ii)
 		cpu->interrupt_count[ii] = 0;
 }
@@ -87,7 +88,7 @@ int cpu_get_operand_size(enum op_type tp) {
 static
 void cpu_mcycle(struct cpu* cpu) {
 // Adds one more clock cycle, and calls periperal clock cycle fns
-	++cpu->mcycles;
+	++cpu->nr_mcycles;
 	--cpu->cycles_left;
 	mcycle_tick(cpu->mcycle);
 }
