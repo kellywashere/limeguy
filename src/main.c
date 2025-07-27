@@ -1,4 +1,4 @@
-// TODO: Clean this up: introduce gameboy.h (gameboy "object")
+// TODO: Remove non-debug related references to gameboy fields (like gameboy->ppu...)
 // TODO: move to more traditional style of cmd line arguments
 #include <bits/time.h>
 #include <stdio.h>
@@ -8,13 +8,11 @@
 
 #include <raylib.h>
 
-#include "rom.h"
-#include "mem.h"
-#include "src/common.h"
-#include "timers.h"
-#include "mcycle.h"
-#include "cpu.h"
-#include "ppu.h"
+#include "gameboy.h"
+#include "common.h"
+
+// ld b,b -- break (mooneye test suite) -- comment if not desired
+//#define INSTR_BREAK 0x40
 
 // window size
 const int imgWidth  = 160;
@@ -36,7 +34,6 @@ struct limeguy_color rgba_palette[] = {
 	{.r=0x94, .g=0x75, .b=0x20, .a=0xFF}   // off:#947520
 };
 
-#define EXTRA_LOGGING
 
 // cmd line params
 char* logfile_name = NULL;
@@ -46,32 +43,6 @@ unsigned int max_instr = 0;
 unsigned int max_mcycles = 0;
 unsigned int start_logging_instrnr = 0;
 bool have_graphics = true; // if false, does not even open window
-
-void print_state_gbdoctor(struct cpu* cpu, FILE* logfile) {
-	if (!logfile) return;
-	u16 f = (cpu->flags.Z << 7) | (cpu->flags.N << 6) | (cpu->flags.H << 5) | (cpu->flags.C << 4);
-	fprintf(logfile, "A:%02X ", (u16)cpu->regs[REG_A] & 0x0FF);
-	fprintf(logfile, "F:%02X ", f);
-	fprintf(logfile, "B:%02X ", (u16)cpu->regs[REG_B] & 0x0FF);
-	fprintf(logfile, "C:%02X ", (u16)cpu->regs[REG_C] & 0x0FF);
-	fprintf(logfile, "D:%02X ", (u16)cpu->regs[REG_D] & 0x0FF);
-	fprintf(logfile, "E:%02X ", (u16)cpu->regs[REG_E] & 0x0FF);
-	fprintf(logfile, "H:%02X ", (u16)cpu->regs[REG_H] & 0x0FF);
-	fprintf(logfile, "L:%02X ", (u16)cpu->regs[REG_L] & 0x0FF);
-	fprintf(logfile, "SP:%04X ", (u16)cpu->SP);
-	fprintf(logfile, "PC:%04X ", (u16)cpu->PC);
-	fprintf(logfile, "PCMEM:");
-	for (int offs = 0; offs < 4; ++offs)
-		fprintf(logfile, "%02X%c", mem_read(cpu->mem, cpu->PC + offs) & 0x0FF,
-#ifndef EXTRA_LOGGING
-				offs < 3 ? ',':'\n');
-#else
-				offs < 3 ? ',':' ');
-	fprintf(logfile, " ");
-	fprintf(logfile, "%c%c%c%c  ", cpu->flags.Z?'Z':'-', cpu->flags.N?'N':'-', cpu->flags.H?'H':'-', cpu->flags.C?'C':'-');
-	cpu_fprint_instr_at_pc(cpu, logfile);
-#endif
-}
 
 void print_usage(char* progname) {
 	printf("Usage: %s [[b]addr_hex] [[i]instr#] [lLogfile] [sinstr#] [m????] [M????] [n] <romfile>\n", progname);
@@ -145,6 +116,8 @@ int main(int argc, char* argv[]) {
 			fprintf(stderr, "Error: could not open log file %s\n", logfile_name);
 	}
 
+	struct gameboy* gameboy = gameboy_create(argv[argc - 1]);
+
 	if (have_graphics) { // init raylib window
     	InitWindow(winWidth, winHeight, "Dynamic texture");
 
@@ -154,59 +127,45 @@ int main(int argc, char* argv[]) {
     	SetTargetFPS(fps);
 	}
 
-	// Set up game boy hardware
-	struct mem* mem = mem_create();
-
-	struct rom* rom = rom_create(argv[argc - 1]);
-	if (!rom->data)
-		return 2;
-	mem_connect_rom(mem, rom);
-	printf("Loaded ROM %s. Type: %02X\n", argv[argc-1], rom_get_type(rom));
-
-	struct timers* timers = timers_create(mem);
-	struct ppu* ppu = ppu_create(mem);
-	// struct ppu* ppu = NULL;
-
-	struct mcycle* mcycle = mcycle_create(timers, ppu);
-	struct cpu* cpu = cpu_create(mem, mcycle);
-
 	bool break_hit = false;
 	bool done = false;
 
 	clock_gettime(CLOCK_REALTIME, &start_time);
 
 	// "game" loop
-	while (!done && !cpu_is_stopped(cpu)) {
+	while (!done && !cpu_is_stopped(gameboy->cpu)) {
 		if (have_graphics)
 			done = WindowShouldClose();
 
 		// TODO: How to define the exact "frame" loop?
 		// frame loop (run instrucutions until frame is done, or some max is exceeded)
 		bool frame_done = false;
-		cpu_reset_mcycle_frame(cpu);
+		cpu_reset_mcycle_frame(gameboy->cpu);
 		while (!done && !frame_done) {
 
-			if (logfile && cpu->nr_instructions + 1 >= start_logging_instrnr) {
+			if (logfile && gameboy->cpu->nr_instructions + 1 >= start_logging_instrnr) {
 #ifdef EXTRA_LOGGING
-				fprintf(logfile, "%8u ", cpu->nr_instructions + 1);
-				if (ppu)
-					fprintf(logfile, "%d,%d,%d ", ppu->xdot, ppu->ly, ppu->mode);
+				fprintf(logfile, "%8u ", gameboy->cpu->nr_instructions + 1);
+				if (gameboy->ppu)
+					fprintf(logfile, "%d,%d,%d ", gameboy->ppu->xdot, gameboy->ppu->ly, gameboy->ppu->mode);
 #endif
-				print_state_gbdoctor(cpu, logfile);
+				cpu_print_state_gbdoctor(gameboy->cpu, logfile);
 			}
 
 			// break point conditions
-			if (break_instrnr > 0 && cpu->nr_instructions + 1 == break_instrnr)
+			if (break_instrnr > 0 && gameboy->cpu->nr_instructions + 1 == break_instrnr)
 				break_hit = true;
-			if (break_addr >= 0 && cpu->PC == break_addr)
+			if (break_addr >= 0 && gameboy->cpu->PC == break_addr)
 				break_hit = true;
-			if (mem->io[0x03]) // unused IO addr used as break
+			if (gameboy->mem->io[0x03]) // unused IO addr used as break
 				break_hit = true;
-			// TODO: break on LD B,B (mooneye test suite)
-
+#ifdef INSTR_BREAK
+			if (cpu_get_opcode_at_pc(gameboy->cpu) == INSTR_BREAK) //break on LD B,B (mooneye test suite)
+				break_hit = true;
+#endif
 			if (break_hit) {
-				printf("\nInstr #: %u\n", cpu->nr_instructions + 1);
-				cpu_print_info(cpu);
+				printf("\nInstr #: %u\n", gameboy->cpu->nr_instructions + 1);
+				cpu_print_info(gameboy->cpu);
 				char buf[80];
 				fgets(buf, 80, stdin);
 				if (buf[0] == 'q')
@@ -215,7 +174,7 @@ int main(int argc, char* argv[]) {
 					break_hit = false;
 				else if (buf[0] == 'd') {
 					u16 disp_addr = strtol(buf + 1, NULL, 16);
-					printf("Mem content: $%02X\n", mem_read(mem, disp_addr));
+					printf("Mem content: $%02X\n", mem_read(gameboy->mem, disp_addr));
 				}
 				else if (buf[0] == 'l' && !logfile) {
 					// Remove newline
@@ -230,27 +189,29 @@ int main(int argc, char* argv[]) {
 				}
 			}
 
-			cpu_run_instruction(cpu);
+			cpu_run_instruction(gameboy->cpu);
 
 			// exit conditions
-			if (cpu->nr_instructions == max_instr || (max_mcycles && cpu->nr_mcycles >= max_mcycles))
+			if (gameboy->cpu->nr_instructions == max_instr || (max_mcycles && gameboy->cpu->nr_mcycles >= max_mcycles))
 				done = true;
-			if (cpu_get_mcycle_frame(cpu) > 2 * mcycles_per_frame) // loads of margin...
+			if (cpu_get_mcycle_frame(gameboy->cpu) > 2 * mcycles_per_frame) // loads of margin...
 				frame_done = true;
-			if (ppu && ppu_frame_is_done(ppu)) {
-				ppu_reset_frame_done(ppu);
+			if (gameboy->ppu && ppu_frame_is_done(gameboy->ppu)) {
+				ppu_reset_frame_done(gameboy->ppu);
 				frame_done = true;
 			}
 		} // end frame loop
 
 		if (have_graphics) {
-			ppu_lcd_to_rgba(ppu, rgba_pixels, imgWidth, imgHeight, rgba_palette);
+			ppu_lcd_to_rgba(gameboy->ppu, rgba_pixels, imgWidth, imgHeight, rgba_palette);
 			UpdateTexture(dynamic_tex, rgba_pixels);
         	BeginDrawing();
         		ClearBackground(RAYWHITE); // Not needed
 				DrawTextureEx(dynamic_tex, (Vector2) {0, 0}, 0.0f, (float)pixScale, WHITE);
+        		/*
         		DrawText(TextFormat("FPS: %d", GetFPS()), 10, 10, 30, RED);
         		DrawText(TextFormat("Mcycles this frame: %d", cpu_get_mcycle_frame(cpu)), 10, 40, 30, RED);
+        		*/
         	EndDrawing();
 		}
 	} // end game loop
@@ -260,26 +221,22 @@ int main(int argc, char* argv[]) {
 		(double)(end_time.tv_nsec - start_time.tv_sec) * 1.0E-9;
 
 	// print execution / debug summary
-	printf("Instructions executed: %d\n", cpu->nr_instructions);
-	printf("Frames drawn: %u\n", ppu->nr_frames);
-	printf("Elapsed time: %fs (realtime clock), %fs (frames)\n", elapsed_time, (double)ppu->nr_frames * (1.0 / (double)fps));
-	printf("M-cycles: %d; T-cycles: %d\n", cpu->nr_mcycles, 4 * cpu->nr_mcycles);
-	printf("Clock speed: %4.3f MHz (T-cycles / sec)\n", ((double)(4 * cpu->nr_mcycles)) / elapsed_time / 1.0e6);
+	printf("Instructions executed: %d\n", gameboy->cpu->nr_instructions);
+	printf("Frames drawn: %u\n", gameboy->ppu->nr_frames);
+	printf("Elapsed time: %fs (realtime clock), %fs (frames)\n", elapsed_time, (double)gameboy->ppu->nr_frames * (1.0 / (double)fps));
+	printf("M-cycles: %d; T-cycles: %d\n", gameboy->cpu->nr_mcycles, 4 * gameboy->cpu->nr_mcycles);
+	printf("Clock speed: %4.3f MHz (T-cycles / sec)\n", ((double)(4 * gameboy->cpu->nr_mcycles)) / elapsed_time / 1.0e6);
 	printf("Interrupt count:\n");
-	printf("  Vblank: %d\n", cpu->interrupt_count[0]);
-	printf("  LCD:    %d\n", cpu->interrupt_count[1]);
-	printf("  Timer:  %d\n", cpu->interrupt_count[2]);
-	printf("  Serial: %d\n", cpu->interrupt_count[3]);
-	printf("  Joypad: %d\n", cpu->interrupt_count[4]);
+	printf("  Vblank: %d\n", gameboy->cpu->interrupt_count[0]);
+	printf("  LCD:    %d\n", gameboy->cpu->interrupt_count[1]);
+	printf("  Timer:  %d\n", gameboy->cpu->interrupt_count[2]);
+	printf("  Serial: %d\n", gameboy->cpu->interrupt_count[3]);
+	printf("  Joypad: %d\n", gameboy->cpu->interrupt_count[4]);
 
 	// clean-up
 	if (logfile)
 		fclose(logfile);
-	ppu_destroy(ppu);
-	timers_destroy(timers);
-	cpu_destroy(cpu);
-	rom_destroy(rom);
-	mem_destroy(mem);
+	gameboy_destroy(gameboy);
 	if (have_graphics) {
     	free(rgba_pixels);
     	UnloadTexture(dynamic_tex);

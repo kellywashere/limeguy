@@ -62,6 +62,32 @@ unsigned int cpu_get_mcycle_frame(struct cpu* cpu) {
 	return cpu->nr_mcycles_frame;
 }
 
+void cpu_print_state_gbdoctor(struct cpu* cpu, FILE* logfile) {
+	if (!logfile) return;
+	u16 f = (cpu->flags.Z << 7) | (cpu->flags.N << 6) | (cpu->flags.H << 5) | (cpu->flags.C << 4);
+	fprintf(logfile, "A:%02X ", (u16)cpu->regs[REG_A] & 0x0FF);
+	fprintf(logfile, "F:%02X ", f);
+	fprintf(logfile, "B:%02X ", (u16)cpu->regs[REG_B] & 0x0FF);
+	fprintf(logfile, "C:%02X ", (u16)cpu->regs[REG_C] & 0x0FF);
+	fprintf(logfile, "D:%02X ", (u16)cpu->regs[REG_D] & 0x0FF);
+	fprintf(logfile, "E:%02X ", (u16)cpu->regs[REG_E] & 0x0FF);
+	fprintf(logfile, "H:%02X ", (u16)cpu->regs[REG_H] & 0x0FF);
+	fprintf(logfile, "L:%02X ", (u16)cpu->regs[REG_L] & 0x0FF);
+	fprintf(logfile, "SP:%04X ", (u16)cpu->SP);
+	fprintf(logfile, "PC:%04X ", (u16)cpu->PC);
+	fprintf(logfile, "PCMEM:");
+	for (int offs = 0; offs < 4; ++offs)
+		fprintf(logfile, "%02X%c", mem_read(cpu->mem, cpu->PC + offs) & 0x0FF,
+#ifndef EXTRA_LOGGING
+				offs < 3 ? ',':'\n');
+#else
+				offs < 3 ? ',':' ');
+	fprintf(logfile, " ");
+	fprintf(logfile, "%c%c%c%c  ", cpu->flags.Z?'Z':'-', cpu->flags.N?'N':'-', cpu->flags.H?'H':'-', cpu->flags.C?'C':'-');
+	cpu_fprint_instr_at_pc(cpu, logfile);
+#endif
+}
+
 static struct instruction opcode_lookup[512];   // contains instruction info includinng jump table; initialized later
 
 static
@@ -379,6 +405,13 @@ void cpu_fprint_operand(struct cpu* cpu, enum op_type tp, FILE* stream) {
 		fprintf(stream,"%d", tp - LIT0);
 	else
 		fprintf(stderr, "cpu_print_operand: unreachable (tp = %d)\n", tp);
+}
+
+
+// DEBUG
+
+u8 cpu_get_opcode_at_pc(struct cpu* cpu) {
+	return mem_read(cpu->mem, cpu->PC);
 }
 
 void cpu_fprint_instr_at_pc(struct cpu* cpu, FILE* stream) {

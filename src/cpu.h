@@ -9,6 +9,8 @@
 
 #define NR_REGS 7
 
+// if EXTRA_LOGGING defined: prints more than just gbdoctor info
+#define EXTRA_LOGGING
 
 // TODO: any way to simplify / generalize this mess?
 enum op_type {
@@ -88,7 +90,11 @@ bool cpu_is_stopped(struct cpu* cpu);
 void cpu_reset_mcycle_frame(struct cpu* cpu);
 unsigned int cpu_get_mcycle_frame(struct cpu* cpu);
 
+// DEBUG
+u8 cpu_get_opcode_at_pc(struct cpu* cpu);
 void cpu_print_info(struct cpu* cpu);
 void cpu_fprint_instr_at_pc(struct cpu* cpu, FILE* stream);
+
+void cpu_print_state_gbdoctor(struct cpu* cpu, FILE* logfile);
 
 #endif
