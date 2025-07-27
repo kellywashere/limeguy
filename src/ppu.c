@@ -18,6 +18,8 @@ struct ppu* ppu_create(struct mem* mem) {
 	ppu->mode = PPU_MODE_HBLANK;
 	ppu->last_line_rendered = -1;
 	ppu->enabled = true;
+	ppu->frame_done = false;
+	ppu->nr_frames = 0;
 	return ppu;
 }
 
@@ -77,7 +79,9 @@ void ppu_mcycle(struct ppu* ppu) {
 	if (ppu->xdot >= XDOT_MAX) {
 		++ppu->ly;
 		if (ppu->ly >= LY_MAX) {
-			ppu->ly -= LY_MAX; // TODO: Do something else here?
+			ppu->ly -= LY_MAX;
+			ppu->frame_done = true;
+			++ppu->nr_frames;
 		}
 		ppu->xdot -= XDOT_MAX;
 	}
@@ -109,5 +113,13 @@ void ppu_lcd_to_rgba(struct ppu* ppu, u8* pixels, int pixw, int pixh, struct lim
 			pixels[pix_idx++] = rgba_palette[lcd_col].a;
 		}
 	}
+}
+
+bool ppu_frame_is_done(struct ppu* ppu) {
+	return ppu->frame_done;
+}
+
+void ppu_reset_frame_done(struct ppu* ppu) {
+	ppu->frame_done = false;
 }
 

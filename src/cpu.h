@@ -59,11 +59,12 @@ struct cpu {
 
 	bool stopped;
 
+	unsigned int nr_mcycles_frame; // mcycle counter that can be reset
 
 	// FIXME: DEBUG VARS
-	int nr_mcycles;
-	int nr_instructions;
-	int interrupt_count[5];
+	unsigned int nr_mcycles;
+	unsigned int nr_instructions;
+	unsigned int interrupt_count[5];
 };
 
 typedef void instr_fn(struct cpu* cpu, struct instruction* instr); // instruction function type
@@ -83,6 +84,9 @@ void cpu_destroy(struct cpu* cpu);
 
 void cpu_run_instruction(struct cpu* cpu);
 bool cpu_is_stopped(struct cpu* cpu);
+
+void cpu_reset_mcycle_frame(struct cpu* cpu);
+unsigned int cpu_get_mcycle_frame(struct cpu* cpu);
 
 void cpu_print_info(struct cpu* cpu);
 void cpu_fprint_instr_at_pc(struct cpu* cpu, FILE* stream);

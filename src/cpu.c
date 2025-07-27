@@ -32,6 +32,7 @@ void cpu_init(struct cpu* cpu) {
 	cpu->stopped = false;
 
 	cpu->nr_mcycles = 0;
+	cpu->nr_mcycles_frame = 0; // resetable version
 	cpu->nr_instructions = 0;
 	for (int ii = 0; ii < 5; ++ii)
 		cpu->interrupt_count[ii] = 0;
@@ -51,6 +52,14 @@ void cpu_destroy(struct cpu* cpu) {
 
 bool cpu_is_stopped(struct cpu* cpu) {
 	return cpu->stopped;
+}
+
+void cpu_reset_mcycle_frame(struct cpu* cpu) {
+	cpu->nr_mcycles_frame = 0;
+}
+
+unsigned int cpu_get_mcycle_frame(struct cpu* cpu) {
+	return cpu->nr_mcycles_frame;
 }
 
 static struct instruction opcode_lookup[512];   // contains instruction info includinng jump table; initialized later
@@ -89,6 +98,7 @@ static
 void cpu_mcycle(struct cpu* cpu) {
 // Adds one more clock cycle, and calls periperal clock cycle fns
 	++cpu->nr_mcycles;
+	++cpu->nr_mcycles_frame;
 	--cpu->cycles_left;
 	mcycle_tick(cpu->mcycle);
 }
@@ -258,6 +268,8 @@ void cpu_do_interrupt(struct cpu* cpu, int nr) {
 }
 
 void cpu_run_instruction(struct cpu* cpu) { // process 1 M-cycle
+	++cpu->nr_instructions; // increased here already, to make compatible with older versions of limeguy
+
 	if (cpu->stopped)
 		return; // TODO: 
 

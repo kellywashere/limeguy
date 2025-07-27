@@ -27,8 +27,13 @@ struct ppu {
 
 	gb_color    lcd[LCD_WIDTH * LCD_HEIGHT];
 
+	bool        frame_done; // set to true when ly goes back to 0
+
 	// helper
 	int last_line_rendered;
+
+	// DEBUG
+	unsigned int nr_frames;
 };
 
 struct ppu* ppu_create(struct mem* mem);
@@ -38,6 +43,9 @@ void ppu_mcycle(struct ppu* ppu);
 
 // rgba_palette order: lcd col 0, lcd col 1, lcd col 2, lcd col 3, off color
 void ppu_lcd_to_rgba(struct ppu* ppu, u8* pixels, int pixw, int pixh, struct limeguy_color rgba_palette[5]);
+
+bool ppu_frame_is_done(struct ppu* ppu);
+void ppu_reset_frame_done(struct ppu* ppu);
 
 #endif
 
