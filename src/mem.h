@@ -15,6 +15,10 @@ struct mem {
 	u8          hiram[0x7F];
 	u8          ie; // IE interrupt enbl flags. Note: IF is at io[0x0F]
 
+	// DMA state
+	bool dma_requested; // set when writing to 0xFF46
+	bool dma_next_cycle; // hand-over bool to delay by one cycle
+	u16         dma_request_addres;
 	bool        dma_active;
 	u16         dma_addr;
 

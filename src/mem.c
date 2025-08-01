@@ -84,6 +84,8 @@ struct mem* mem_create() {
 	// DEBUG  TODO: Remove
 	mem->io[IO_UNUSED] = 0;
 
+	mem->dma_requested = false;
+	mem->dma_next_cycle = false;
 	mem->dma_active = false;
 
 	mem->div_was_reset = false;
@@ -163,10 +165,8 @@ void mem_write(struct mem* mem, u16 addr, u8 value) {
 		u8 io_idx = addr & 0xFF;
 		switch (io_idx) {
 			case IO_DMA:
-				mem->dma_active = true;
-				mem->dma_addr = (value << 8) | 0xFF;
-				// The 0xFF LSB is a dirty hack to make DMA start one cycle later to pass mooneye tests...
-				// TODO: Is this realistic??
+				mem->dma_requested = true;
+				mem->dma_request_addres = value << 8;
 				break;
 			case IO_STAT:
 				mem->io[io_idx] = value & 0xF8; // 3 lsb are read only
@@ -217,15 +217,21 @@ bool mem_is_cpu_double_speed(struct mem* mem) {
 }
 
 void mem_mcycle(struct mem* mem) {
+	if (mem->dma_requested) {
+		mem->dma_requested = false;
+		mem->dma_next_cycle = true;
+		return;
+	}
+	if (mem->dma_next_cycle) {
+		mem->dma_next_cycle = false;
+		mem->dma_active = true;
+		mem->dma_addr = mem->dma_request_addres;
+		// No return: we proceed after
+	}
 	if (mem->dma_active) {
 		u8 addr_lo = mem->dma_addr & 0xFF;
 		if (addr_lo == OAM_SIZE) // Done?
 			mem->dma_active = false;
-		else if (addr_lo == 0xFF) {
-			// The 0xFF LSB is a dirty hack to make DMA start one cycle later to pass mooneye tests...
-			// TODO: Is this realistic??
-			mem->dma_addr &= 0xFF00; // set LSB to 0
-		}
 		else {
 			u8 value = mem_read(mem, mem->dma_addr);
 			mem->oam[addr_lo] = value;
