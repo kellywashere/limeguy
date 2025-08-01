@@ -34,6 +34,7 @@
 #define IO_SCX  0x43 /* X scroll */
 #define IO_LY   0x44 /* LCD LY */
 #define IO_LYC  0x45 /* LY cmp */
+#define IO_DMA  0x46 /* OAM DMA */
 #define IO_BGP  0x47 /* BG Palette */
 
 #define HIRAM_START   0xFF80
@@ -83,6 +84,10 @@ struct mem* mem_create() {
 	// DEBUG  TODO: Remove
 	mem->io[IO_UNUSED] = 0;
 
+	mem->dma_active = false;
+
+	mem->div_was_reset = false;
+
 	return mem;
 }
 
@@ -99,16 +104,20 @@ void mem_disconnect_rom(struct mem* mem) {
 }
 
 u8 mem_read(struct mem* mem, u16 addr) {
+	bool is_oam = (addr >= OAM_START && addr < (OAM_START + OAM_SIZE));
+	if (mem->dma_active && is_oam)
+		return 0xFF;
 	if (addr >= ECHO_RAM && addr < ECHO_RAM + ECHO_RAM_SIZE)
 		addr -= ECHO_RAM_OFFS;
+
 	if (addr < VRAM) // ROM bank 00 & 01
 		return rom_read(mem->rom, addr);
 	else if (addr >= VRAM && addr < ECHO_RAM)
 		return mem->ram[addr - VRAM]; // includes echo RAM
 	else if (addr >= HIRAM_START && addr < (HIRAM_START + HIRAM_SIZE))
 		return mem->hiram[addr - HIRAM_START];
-	else if (addr >= OAM_START && addr < (OAM_START + OAM_SIZE)) {
-		return mem->oam[addr & 0xFF]; // TODO
+	else if (is_oam) {
+		return mem->oam[addr & 0xFF];
 	}
 	else if (addr >= IO_START && addr < (IO_START + IO_SIZE)) { // IO operation
 		u8 io_idx = addr & 0xFF;
@@ -132,21 +141,29 @@ u16 mem_read16(struct mem* mem, u16 addr) {
 }
 
 void mem_write(struct mem* mem, u16 addr, u8 value) {
+	bool is_oam = (addr >= OAM_START && addr < (OAM_START + OAM_SIZE));
+	if (mem->dma_active && is_oam)
+		return;
 	if (addr >= ECHO_RAM && addr < ECHO_RAM + ECHO_RAM_SIZE)
 		addr -= ECHO_RAM_OFFS;
+
 	if (addr < VRAM) // ROM bank 00 & 01
 		rom_write(mem->rom, addr, value);
 	else if (addr >= VRAM && addr < ECHO_RAM)
 		mem->ram[addr - VRAM] = value; // includes echo RAM
 	else if (addr >= HIRAM_START && addr < (HIRAM_START + HIRAM_SIZE))
 		mem->hiram[addr - HIRAM_START] = value;
-	else if (addr >= OAM_START && addr < (OAM_START + OAM_SIZE)) {
+	else if (is_oam) {
 		mem->oam[addr & 0xFF] = value;
 	}
 	else if (addr >= IO_START && addr < (IO_START + IO_SIZE)) { // IO operation
 		u8 io_idx = addr & 0xFF;
 		switch (io_idx) {
-			case IO_LY: // read only
+			case IO_DMA:
+				mem->dma_active = true;
+				mem->dma_addr = (value << 8) | 0xFF;
+				// The 0xFF LSB is a dirty hack to make DMA start one cycle later to pass mooneye tests...
+				// TODO: Is this realistic??
 				break;
 			case IO_STAT:
 				mem->io[io_idx] = value & 0xF8; // 3 lsb are read only
@@ -158,7 +175,10 @@ void mem_write(struct mem* mem, u16 addr, u8 value) {
 				}
 				break;
 			case IO_DIV:
-				mem->io[io_idx] = 0;
+				mem->io[io_idx] = 0; // Writing anything to DIV resets timer
+				mem->div_was_reset = true; // mooneye requires syncing timer to this reset
+				break;
+			case IO_LY: // read only
 				break;
 			default:
 				mem->io[io_idx] = value;
@@ -193,10 +213,34 @@ bool mem_is_cpu_double_speed(struct mem* mem) {
 	return false;
 }
 
+void mem_mcycle(struct mem* mem) {
+	if (mem->dma_active) {
+		u8 addr_lo = mem->dma_addr & 0xFF;
+		if (addr_lo == OAM_SIZE) // Done?
+			mem->dma_active = false;
+		else if (addr_lo == 0xFF) {
+			// The 0xFF LSB is a dirty hack to make DMA start one cycle later to pass mooneye tests...
+			// TODO: Is this realistic??
+			mem->dma_addr &= 0xFF00; // set LSB to 0
+		}
+		else {
+			u8 value = mem_read(mem, mem->dma_addr);
+			mem->oam[addr_lo] = value;
+			++mem->dma_addr;
+		}
+	}
+}
+
 u8 mem_timers_get_tac(struct mem* mem) {
 	return mem->io[IO_TAC] & 0x07;
 }
 
+bool mem_timers_sync(struct mem* mem) {
+	// returns true when DIV timer was hust reset
+	bool div_was_reset = mem->div_was_reset;
+	mem->div_was_reset = false;
+	return div_was_reset;
+}
 
 void mem_timers_div_inc(struct mem* mem) {
 	// TODO: Putting this fn in mem in stead of timers is hacky. Move to timers !

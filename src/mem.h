@@ -15,6 +15,11 @@ struct mem {
 	u8          hiram[0x7F];
 	u8          ie; // IE interrupt enbl flags. Note: IF is at io[0x0F]
 
+	bool        dma_active;
+	u16         dma_addr;
+
+	bool        div_was_reset; // To allow syncing DIV timer to a write op
+
 	//gb_color*   tiles; // For pre-decoded tiles
 };
 
@@ -35,8 +40,11 @@ void mem_clear_interrupt_flag(struct mem* mem, int nr);
 
 bool mem_is_cpu_double_speed(struct mem* mem);
 
+void mem_mcycle(struct mem* mem); // Only used for DMA
+
 // Timer interace
 u8 mem_timers_get_tac(struct mem* mem);
+bool mem_timers_sync(struct mem* mem);
 void mem_timers_div_inc(struct mem* mem);
 void mem_timers_tima_inc(struct mem* mem);
 

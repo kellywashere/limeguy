@@ -25,6 +25,8 @@ void timers_mcycle(struct timers* timers) { // called every M-cycle = 4 T-cycles
 	int clockselect_to_maxcount[4] = { 256, 4, 16, 64 };
 	
 	// DIV
+	if (mem_timers_sync(timers->mem))
+			timers->count_div = 0;
 	++timers->count_div;
 	if (timers->count_div >= DIVCOUNT) {
 		timers->count_div = 0;

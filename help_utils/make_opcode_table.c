@@ -19,9 +19,10 @@ const char* literal_to_str[] = {"LIT0", "LIT1", "LIT2", "LIT3", "LIT4", "LIT5", 
 #define MEM_C "MEM_C"
 
 void println(char* mnemonic, const char* op1, const char* op2, int cycles, int cycles2, bool legal, int opcode) {
+	(void)legal;
 	printf("\t{%*s", 8 - (int)strlen(mnemonic), "");
 	//printf("\"%s\", %7s, %9s, %9s, %2d, %2d, %6s},", mnemonic, mnemonic, op1, op2, cycles, cycles2, legal?"true":"false");
-	printf("\"%s\", %7s, %12s, %9s, %2d, %2d},", mnemonic, mnemonic, op1, op2, cycles, cycles2);
+	printf("\"%s\", %7s, %12s, %9s, %2d, %2d, 0x%02X},", mnemonic, mnemonic, op1, op2, cycles, cycles2, opcode);
 	printf(" // opcode 0x%02X = OCT %03o\n", opcode, opcode);
 }
 

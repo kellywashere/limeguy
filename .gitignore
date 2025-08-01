@@ -9,7 +9,11 @@ compile_commands.json
 *.gb
 *.log
 */bu/
+help_utils/*
+!help_utils/*.c
 help_utils/test*
 *.*_bu
 mooneye
+mooneye.txt
+
 

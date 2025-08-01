@@ -510,14 +510,27 @@ static void BIT(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void CALL(struct cpu* cpu, struct instruction* instr) {
+/*
+; CALL cc, nn is expected to have the following timing:
+; M = 0: instruction decoding
+; M = 1: nn read: memory access for low byte
+; M = 2: nn read: memory access for high byte
+; M = 3: internal delay
+; M = 4: PC push: memory access for high byte
+; M = 5: PC push: memory access for low byte
+*/
 	u16 addr = cpu_get_operand(cpu, instr->op2);
 	bool cond = cpu_check_cond(cpu, instr->op1);
 	if (cond) {
-		cpu->SP -= 2;
-		cpu_memwrite16_cycle(cpu, cpu->SP, cpu->PC);
+		cpu_mcycle(cpu); // extra cycle M=3
+		cpu_mcycle(cpu);
+		mem_write(cpu->mem, --cpu->SP, cpu->PC >> 8);
+		//cpu_memwrite16_cycle(cpu, cpu->SP, cpu->PC);
+		cpu_mcycle(cpu);
+		mem_write(cpu->mem, --cpu->SP, cpu->PC & 0xFF);
 		cpu->PC = addr;
 	}
-	else
+	else // TODO: Remove the need for cycles_left to begin with...
 		cpu->cycles_left -= (instr->cycles - instr->cycles_alt);
 }
 
@@ -613,6 +626,10 @@ static void JP(struct cpu* cpu, struct instruction* instr) {
 	bool cond = cpu_check_cond(cpu, instr->op1);
 	cpu->PC = cond ? addr : cpu->PC;
 	// correct cycles in case jump not taken
+	/*
+	if (cond && instr->op2 == IMM16) // not for JP HL
+		cpu_mcycle(cpu);
+	*/
 	cpu->cycles_left -= cond ? 0 : (instr->cycles - instr->cycles_alt);
 }
 
@@ -663,10 +680,35 @@ static void POP(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void PUSH(struct cpu* cpu, struct instruction* instr) {
+	// passing mooneye push_timing.gb
+	/*
+; PUSH rr is expected to have the following timing:
+; M = 0: instruction decoding
+; M = 1: internal delay
+; M = 2: memory access for high byte
+; M = 3: memory access for low byte
+	*/
+	u16 w = cpu_get_operand(cpu, instr->op1);
+	//printf("PUSH0: just did DMA at OAM %02X. DMA active: %d\n", (cpu->mem->dma_addr & 0xFF) - 1, cpu->mem->dma_active?1:0);
+	cpu_mcycle(cpu);
+	//printf("PUSH1: just did DMA at OAM %02X. DMA active: %d\n", (cpu->mem->dma_addr & 0xFF) - 1, cpu->mem->dma_active?1:0);
+	cpu_mcycle(cpu);
+	//printf("PUSH2: just did DMA at OAM %02X. DMA active: %d\n", (cpu->mem->dma_addr & 0xFF) - 1, cpu->mem->dma_active?1:0);
+	//printf("PUSH2: writing high byte\n");
+	mem_write(cpu->mem, --cpu->SP, w >> 8);
+	cpu_mcycle(cpu);
+	//printf("PUSH3: just did DMA at OAM %02X. DMA active: %d\n", (cpu->mem->dma_addr & 0xFF) - 1, cpu->mem->dma_active?1:0);
+	//printf("PUSH3: writing low byte\n");
+	mem_write(cpu->mem, --cpu->SP, w & 0xFF);
+}
+
+/*
+static void PUSH(struct cpu* cpu, struct instruction* instr) {
 	u16 w = cpu_get_operand(cpu, instr->op1);
 	cpu->SP -= 2;
 	cpu_memwrite16_cycle(cpu, cpu->SP, w);
 }
+*/
 
 static void RES(struct cpu* cpu, struct instruction* instr) {
 	u16 b = cpu_get_operand(cpu, instr->op1);
@@ -676,12 +718,28 @@ static void RES(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void RET(struct cpu* cpu, struct instruction* instr) {
+/*  RET: 4 cycles; RET cc: 5 or 2 cycles
+; RET is expected to have the following timing:
+; M = 0: instruction decoding
+; M = 1: PC pop: memory access for low byte
+; M = 2: PC pop: memory access for high byte
+; M = 3: internal delay
+; RET cc is expected to have the following timing:
+; M = 0: instruction decoding
+; M = 1: internal delay
+; M = 2: PC pop: memory access for low byte
+; M = 3: PC pop: memory access for high byte
+; M = 4: internal delay
+*/
 	bool cond = cpu_check_cond(cpu, instr->op1);
+	if (instr->op1 != COND_NIL)
+		cpu_mcycle(cpu);
 	if (cond) {
 		cpu->PC = cpu_memread16_cycle(cpu, cpu->SP);
 		cpu->SP += 2;
+		cpu_mcycle(cpu);
 	}
-	else
+	else // TODO: remove need for cycles_left, make all instructions correct by design
 		cpu->cycles_left -= (instr->cycles - instr->cycles_alt);
 }
 
@@ -779,8 +837,19 @@ static void RRCA(struct cpu* cpu, struct instruction* instr) {
 }
 
 static void RST(struct cpu* cpu, struct instruction* instr) {
-	cpu->SP -= 2;
-	cpu_memwrite16_cycle(cpu, cpu->SP, cpu->PC);
+/*
+; RST is expected to have the following timing:
+; M = 0: instruction decoding
+; M = 1: internal delay
+; M = 2: PC push: memory access for high byte
+; M = 3: PC push: memory access for low byte
+*/
+	cpu_mcycle(cpu); // M=1 internal delay
+	// save PC
+	cpu_mcycle(cpu);
+	mem_write(cpu->mem, --cpu->SP, cpu->PC >> 8);
+	cpu_mcycle(cpu);
+	mem_write(cpu->mem, --cpu->SP, cpu->PC & 0xFF);
 	cpu->PC = 8 * cpu_get_operand(cpu, instr->op1);
 }
 

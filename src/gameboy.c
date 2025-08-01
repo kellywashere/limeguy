@@ -22,7 +22,7 @@ struct gameboy* gameboy_create(const char* rom_file_name) {
 	gameboy->ppu = ppu_create(gameboy->mem);
 	//gameboy->ppu = NULL;
 
-	struct mcycle* mcycle = mcycle_create(gameboy->timers, gameboy->ppu);
+	struct mcycle* mcycle = mcycle_create(gameboy->timers, gameboy->ppu, gameboy->mem);
 
 	gameboy->cpu = cpu_create(gameboy->mem, mcycle);
 

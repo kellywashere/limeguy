@@ -74,10 +74,12 @@ typedef void instr_fn(struct cpu* cpu, struct instruction* instr); // instructio
 struct instruction {
 	char*        mnemonic;
     instr_fn*    func;     // function to call
-	enum op_type op1;
-	enum op_type op2;
+	enum op_type op1; // operand 1
+	enum op_type op2; // operand 2
 	int          cycles;
 	int          cycles_alt; // for non-taken jumps/calls/rets
+	// DEBUG
+	u8           opcode; // Only for DEBUG purposes so far
 };
 
 

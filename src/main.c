@@ -57,7 +57,7 @@ void print_usage(char* progname) {
 	printf("When in step-by-step mode:\n");
 	printf("  q: exit program\n");
 	printf("  c: continue (exit step-by-step mode)\n");
-	printf("  dAddr_hex: display data at address addr_hex\n");
+	printf("  mAddr_hex: display data at address addr_hex\n");
 	printf("  lLogfile: start logging a la game boy doctor\n");
 }
 
@@ -147,7 +147,8 @@ int main(int argc, char* argv[]) {
 #ifdef EXTRA_LOGGING
 				fprintf(logfile, "%8u ", gameboy->cpu->nr_instructions + 1);
 				if (gameboy->ppu)
-					fprintf(logfile, "%d,%d,%d ", gameboy->ppu->xdot, gameboy->ppu->ly, gameboy->ppu->mode);
+					fprintf(logfile, "%d,%d ", gameboy->ppu->xdot, gameboy->ppu->ly);
+				//fprintf(logfile, "%d ", gameboy->timers->count_div);
 #endif
 				cpu_print_state_gbdoctor(gameboy->cpu, logfile);
 			}
@@ -172,7 +173,7 @@ int main(int argc, char* argv[]) {
 					done = true; // causes program to exit
 				else if (buf[0] == 'c')
 					break_hit = false;
-				else if (buf[0] == 'd') {
+				else if (buf[0] == 'm') {
 					u16 disp_addr = strtol(buf + 1, NULL, 16);
 					printf("Mem content: $%02X\n", mem_read(gameboy->mem, disp_addr));
 				}
@@ -218,7 +219,7 @@ int main(int argc, char* argv[]) {
 
 	clock_gettime(CLOCK_REALTIME, &end_time);
 	double elapsed_time = (double)(end_time.tv_sec - start_time.tv_sec) +
-		(double)(end_time.tv_nsec - start_time.tv_sec) * 1.0E-9;
+		(double)(end_time.tv_nsec - start_time.tv_nsec) * 1.0E-9;
 
 	// print execution / debug summary
 	printf("Instructions executed: %d\n", gameboy->cpu->nr_instructions);
