@@ -36,6 +36,8 @@
 #define IO_LYC  0x45 /* LY cmp */
 #define IO_DMA  0x46 /* OAM DMA */
 #define IO_BGP  0x47 /* BG Palette */
+#define IO_WY   0x4A /* Window Y pos */
+#define IO_WX   0x4B /* Window X pos + 7 */
 
 #define HIRAM_START   0xFF80
 #define HIRAM_SIZE    0x7F
@@ -269,6 +271,7 @@ void mem_timers_tima_inc(struct mem* mem) {
 
 
 void mem_ppu_report(struct mem* mem, int ly, int mode){
+	// Update STAT and LY, set interrupt flags
 	// TODO: Spurious STAT interrupt: https://gbdev.io/pandocs/STAT.html#spurious-stat-interrupts
 
 	// TODO: Putting this fn in mem in stead of PPU is hacky. Move to PPU !
@@ -302,8 +305,13 @@ u8 mem_ppu_get_lcdc(struct mem* mem) {
 }
 
 void mem_ppu_get_scroll(struct mem* mem, u8* scx, u8* scy) {
-	*scx = mem->io[IO_SCX];
-	*scy = mem->io[IO_SCY];
+	if (scx) *scx = mem->io[IO_SCX];
+	if (scy) *scy = mem->io[IO_SCY];
+}
+
+void mem_ppu_get_wxwy(struct mem* mem, u8* wx, u8* wy) {
+	if (wx) *wx = mem->io[IO_WX];
+	if (wy) *wy = mem->io[IO_WY];
 }
 
 int mem_ppu_get_tileidx_from_tilemap(struct mem* mem, int tm_idx) {
@@ -315,6 +323,7 @@ int mem_ppu_get_tileidx_from_tilemap(struct mem* mem, int tm_idx) {
 // Draw all tiles in mem (array of tiles).
 // Update tile when VRAM tile data changes.
 // Copy from there directly.
+// TODO: Have start and end pixel nr as param? So we can copy subset of 8 pixel row?
 void mem_ppu_copy_tile_row(struct mem* mem, gb_color_idx* dest, int tile_idx_eff, int tile_row) {
 	// tile_idx_eff: 0 .. 383 (LCDC.5 already processed)
 	// tile_row: 0 .. 7

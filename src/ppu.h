@@ -11,7 +11,7 @@
 // LCD color code when screen off (5th color)
 #define COLOR_LCD_OFF 0x4
 
-enum mode {
+enum ppu_mode {
 	PPU_MODE_HBLANK  = 0,
 	PPU_MODE_VBLANK  = 1,
 	PPU_MODE_OAMSCAN = 2,
@@ -19,18 +19,22 @@ enum mode {
 };
 
 struct ppu {
-	struct mem* mem;
-	bool        enabled;
-	int         xdot; // 0 .. 455
-	int         ly;   // 0 .. 153
-	enum mode   mode;
+	struct mem*   mem;
+	bool          enabled;
+	int           xdot; // 0 .. 455
+	int           ly;   // 0 .. 153
+	enum ppu_mode mode;
 
-	gb_color    lcd[LCD_WIDTH * LCD_HEIGHT];
+	gb_color      lcd[LCD_WIDTH * LCD_HEIGHT];
 
-	bool        frame_done; // set to true when ly goes back to 0
+	bool          frame_done; // set to true when ly goes back to 0
 
 	// helper
-	int last_line_rendered;
+	int           last_line_rendered;
+
+	// window
+	bool          wy_condition; // WY == LY
+	int           wy_counter;
 
 	// DEBUG
 	unsigned int nr_frames;

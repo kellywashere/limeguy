@@ -55,6 +55,7 @@ void mem_timers_tima_inc(struct mem* mem);
 // PPU interface
 void mem_ppu_report(struct mem* mem, int ly, int mode);
 void mem_ppu_get_scroll(struct mem* mem, u8* scx, u8* scy);
+void mem_ppu_get_wxwy(struct mem* mem, u8* wx, u8* wy);
 u8 mem_ppu_get_lcdc(struct mem* mem);
 int mem_ppu_get_tileidx_from_tilemap(struct mem* mem, int tm_idx);
 void mem_ppu_copy_tile_row(struct mem* mem, gb_color_idx* dest, int tile_idx_eff, int tile_row);
