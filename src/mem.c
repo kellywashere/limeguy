@@ -125,6 +125,9 @@ u8 mem_read(struct mem* mem, u16 addr) {
 		// FIXME: this is a hack to pass gb doctor
 		//if (io_idx == IO_LY) return 0x90;
 
+		if (io_idx == IO_IF) // pass mooneye if_ie_registers.gb
+			return mem->io[io_idx] | 0xE0; // MSBits always read as high
+
 		return mem->io[io_idx]; // TODO
 	}
 	else if (addr == INTERRUPT_ENABLE)
