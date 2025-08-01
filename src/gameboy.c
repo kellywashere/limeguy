@@ -18,6 +18,7 @@ struct gameboy* gameboy_create(const char* rom_file_name) {
 	mem_connect_rom(gameboy->mem, gameboy->rom);
 
 	gameboy->timers = timers_create(gameboy->mem);
+	gameboy->timers->count_div = 11; // pass mooneye boot_div-dmg0.gb
 
 	gameboy->ppu = ppu_create(gameboy->mem);
 	//gameboy->ppu = NULL;
@@ -25,7 +26,8 @@ struct gameboy* gameboy_create(const char* rom_file_name) {
 	struct mcycle* mcycle = mcycle_create(gameboy->timers, gameboy->ppu, gameboy->mem);
 
 	gameboy->cpu = cpu_create(gameboy->mem, mcycle);
-
+	cpu_initregs_dmg0(gameboy->cpu);
+	
 	return gameboy;
 }
 

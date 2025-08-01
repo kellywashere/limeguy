@@ -148,6 +148,8 @@ int main(int argc, char* argv[]) {
 				fprintf(logfile, "%8u ", gameboy->cpu->nr_instructions + 1);
 				if (gameboy->ppu)
 					fprintf(logfile, "%d,%d ", gameboy->ppu->xdot, gameboy->ppu->ly);
+				// if (gameboy->timers)
+				// 	fprintf(logfile, "%d,%d ", gameboy->timers->count_div, gameboy->mem->io[0x04]);
 				//fprintf(logfile, "%d ", gameboy->timers->count_div);
 #endif
 				cpu_print_state_gbdoctor(gameboy->cpu, logfile);
@@ -158,7 +160,7 @@ int main(int argc, char* argv[]) {
 				break_hit = true;
 			if (break_addr >= 0 && gameboy->cpu->PC == break_addr)
 				break_hit = true;
-			if (gameboy->mem->io[0x03]) // unused IO addr used as break
+			if (gameboy->mem->io[0x03] != 0xFF) // unused IO addr used as break, when not read as 0xFF
 				break_hit = true;
 #ifdef INSTR_BREAK
 			if (cpu_get_opcode_at_pc(gameboy->cpu) == INSTR_BREAK) //break on LD B,B (mooneye test suite)

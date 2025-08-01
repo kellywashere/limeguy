@@ -82,7 +82,7 @@ struct mem* mem_create() {
 	mem->ie = 0;
 
 	// DEBUG  TODO: Remove
-	mem->io[IO_UNUSED] = 0;
+	mem->io[IO_UNUSED] = 0xFF;
 
 	mem->dma_requested = false;
 	mem->dma_next_cycle = false;

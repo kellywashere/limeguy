@@ -10,19 +10,14 @@
 static
 void cpu_init(struct cpu* cpu) {
 	// game boy doctor state:
-	cpu->regs[REG_A] = 0x01;
-	cpu->regs[REG_B] = 0x00;
-	cpu->regs[REG_C] = 0x13;
-	cpu->regs[REG_D] = 0x00;
-	cpu->regs[REG_E] = 0xD8;
-	cpu->regs[REG_H] = 0x01;
-	cpu->regs[REG_L] = 0x4D;
+	for (int ii = REG_A; ii <= REG_L; ++ii)
+		cpu->regs[ii] = 0;
 	cpu->SP = 0x0FFFE;
 	cpu->PC = 0x0100;
-	cpu->flags.Z = true;
+	cpu->flags.Z = false;
 	cpu->flags.N = false;
-	cpu->flags.H = true;
-	cpu->flags.C = true;
+	cpu->flags.H = false;
+	cpu->flags.C = false;
 	cpu->ime = false;
 	cpu->ei_initiated = false;
 
@@ -36,6 +31,29 @@ void cpu_init(struct cpu* cpu) {
 	cpu->nr_instructions = 0;
 	for (int ii = 0; ii < 5; ++ii)
 		cpu->interrupt_count[ii] = 0;
+}
+
+void cpu_initregs_gbdoctor(struct cpu* cpu) {
+	cpu_init(cpu);
+	// game boy doctor state:
+	cpu->regs[REG_A] = 0x01;
+	cpu->regs[REG_C] = 0x13;
+	cpu->regs[REG_E] = 0xD8;
+	cpu->regs[REG_H] = 0x01;
+	cpu->regs[REG_L] = 0x4D;
+	cpu->flags.Z = true;
+	cpu->flags.H = true;
+	cpu->flags.C = true;
+}
+
+void cpu_initregs_dmg0(struct cpu* cpu) {
+	cpu_init(cpu);
+	cpu->regs[REG_A] = 0x01;
+	cpu->regs[REG_B] = 0xFF;
+	cpu->regs[REG_C] = 0x13;
+	cpu->regs[REG_E] = 0xC1;
+	cpu->regs[REG_H] = 0x84;
+	cpu->regs[REG_L] = 0x03;
 }
 
 struct cpu* cpu_create(struct mem* mem, struct mcycle* mcycle) {

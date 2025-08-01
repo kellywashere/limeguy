@@ -13,8 +13,9 @@
 struct ppu* ppu_create(struct mem* mem) {
 	struct ppu* ppu = malloc(sizeof(struct ppu));
 	ppu->mem = mem;
-	ppu->xdot = 0;
-	ppu->ly = 0;
+	//ppu->xdot = 0;
+	ppu->xdot = 100; // To pass mooneye boot check
+	ppu->ly = LY_MAX - 9; // To pass mooneye boot check
 	ppu->mode = PPU_MODE_HBLANK;
 	ppu->last_line_rendered = -1;
 	ppu->enabled = true;

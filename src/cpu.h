@@ -86,6 +86,9 @@ struct instruction {
 struct cpu* cpu_create(struct mem* mem, struct mcycle* mcycle);
 void cpu_destroy(struct cpu* cpu);
 
+void cpu_initregs_gbdoctor(struct cpu* cpu);
+void cpu_initregs_dmg0(struct cpu* cpu);
+
 void cpu_run_instruction(struct cpu* cpu);
 bool cpu_is_stopped(struct cpu* cpu);
 
