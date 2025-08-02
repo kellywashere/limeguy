@@ -131,7 +131,7 @@ u8 mem_read(struct mem* mem, u16 addr) {
 	}
 	else if (addr >= IO_START && addr < (IO_START + IO_SIZE)) { // IO operation
 		u8 io_idx = addr & 0xFF;
-		// FIXME: this is a hack to pass gb doctor
+		// next line was a hack to pass gb doctor
 		//if (io_idx == IO_LY) return 0x90;
 		switch (io_idx) {
 			case IO_P1: { // read out button presses
@@ -141,6 +141,9 @@ u8 mem_read(struct mem* mem, u16 addr) {
 				u8 hinib = selbut ? (mem->button_state >> 4) : 0;
 				return ((~(lownib | hinib)) & 0xF) | (mem->io[io_idx] & 0xF0);
 			}
+			case IO_STAT:
+ 	 	 	 	// Bit 7 is always high when reading STAT
+				return mem->io[io_idx] | 0x80;
 			case IO_IF: // pass mooneye if_ie_registers.gb
 				return mem->io[io_idx] | 0xE0; // MSBits always read as high
 			default:

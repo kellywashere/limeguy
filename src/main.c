@@ -235,8 +235,10 @@ int main(int argc, char* argv[]) {
 			// exit conditions
 			if (gameboy->cpu->nr_instructions == max_instr || (max_mcycles && gameboy->cpu->nr_mcycles >= max_mcycles))
 				done = true;
+			// we need to end frame at some point when LCD is off
 			if (cpu_get_mcycle_frame(gameboy->cpu) > 2 * mcycles_per_frame) // loads of margin...
 				frame_done = true;
+			// use ppu signaling hand-shake to see if frame is done
 			if (gameboy->ppu && ppu_frame_is_done(gameboy->ppu)) {
 				ppu_reset_frame_done(gameboy->ppu);
 				frame_done = true;

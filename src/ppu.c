@@ -14,18 +14,24 @@
 #define XDOT_DRAW    252 /* debatable...*/
 #define LY_VBLANK    144
 
-struct ppu* ppu_create(struct mem* mem) {
-	struct ppu* ppu = malloc(sizeof(struct ppu));
-	ppu->mem = mem;
-	//ppu->xdot = 0;
-	ppu->xdot = 100; // To pass mooneye boot check
-	ppu->ly = LY_MAX - 9; // To pass mooneye boot check
-	ppu->mode = PPU_MODE_HBLANK;
+static
+void ppu_init(struct ppu* ppu) {
+	ppu->xdot = 0;
+	ppu->ly = 0;
 	ppu->wy_condition = false;
 	ppu->wy_counter = 0;
 	ppu->last_line_rendered = -1;
-	ppu->enabled = true;
 	ppu->frame_done = false;
+}
+
+struct ppu* ppu_create(struct mem* mem) {
+	struct ppu* ppu = malloc(sizeof(struct ppu));
+	ppu->mem = mem;
+	ppu_init(ppu);
+	ppu->xdot = 100; // To pass mooneye boot check
+	ppu->ly = LY_MAX - 9; // To pass mooneye boot check
+	ppu->mode = PPU_MODE_HBLANK;
+	ppu->enabled = true;
 	ppu->nr_frames = 0;
 	return ppu;
 }
@@ -182,19 +188,24 @@ void ppu_draw_scanline(struct ppu* ppu) {
 void ppu_mcycle(struct ppu* ppu) {
 	// called every CPU cycle.
 	// Takes care of updating xdot and ly, setting mode, calling scan line draw
-	bool enbl = (mem_ppu_get_lcdc(ppu->mem) >> 7) == 1;
-	if (ppu->enabled && !enbl) { // LCD just turned off: make screen whiter-than-white
+	bool enbl_prev = ppu->enabled;
+	ppu->enabled = (mem_ppu_get_lcdc(ppu->mem) >> 7) == 1;
+	if (enbl_prev && !ppu->enabled) { // LCD just turned off: make screen whiter-than-white
 		for (int ii = 0; ii < LCD_WIDTH * LCD_HEIGHT; ++ii)
 			ppu->lcd[ii] = COLOR_LCD_OFF;
+		ppu_init(ppu);
 		ppu->mode = PPU_MODE_HBLANK;
 		return;
 	}
+	if (!ppu->enabled)
+		return;
+
 	// one mcycle --> 4 dots (2 dots if cpu in double speed)
 	ppu->xdot += mem_is_cpu_double_speed(ppu->mem) ? 2 : 4;
 
 	if (ppu->xdot >= XDOT_MAX) {
 		++ppu->ly;
-		if (ppu->ly >= LY_MAX) {
+		if (ppu->ly >= LY_MAX) { // LY back to 0
 			ppu->ly -= LY_MAX;
 			ppu->frame_done = true;
 			++ppu->nr_frames;
