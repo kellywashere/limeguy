@@ -195,6 +195,7 @@ void ppu_mcycle(struct ppu* ppu) {
 			ppu->lcd[ii] = COLOR_LCD_OFF;
 		ppu_init(ppu);
 		ppu->mode = PPU_MODE_HBLANK;
+		mem_ppu_report(ppu->mem, ppu->ly, (int)ppu->mode);
 		return;
 	}
 	if (!ppu->enabled)
@@ -263,5 +264,11 @@ bool ppu_frame_is_done(struct ppu* ppu) {
 
 void ppu_reset_frame_done(struct ppu* ppu) {
 	ppu->frame_done = false;
+}
+
+void ppu_print_info(struct ppu* ppu) {
+	printf("PPU: enbl = %d; xdot = %d; ly = %d; mode = %d\n",
+			ppu->enabled ? 1 : 0, ppu->xdot, ppu->ly, ppu->mode);
+	printf("     LCDC = $%02X; STAT = $%02X\n", mem_read(ppu->mem, 0xFF40), mem_read(ppu->mem, 0xFF41));
 }
 

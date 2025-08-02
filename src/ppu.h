@@ -60,5 +60,8 @@ void ppu_lcd_to_rgba(struct ppu* ppu, u8* pixels, int pixw, int pixh, struct lim
 bool ppu_frame_is_done(struct ppu* ppu);
 void ppu_reset_frame_done(struct ppu* ppu);
 
+// DEBUG
+void ppu_print_info(struct ppu* ppu);
+
 #endif
 

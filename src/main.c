@@ -177,6 +177,9 @@ int main(int argc, char* argv[]) {
 
 		// Input
 		get_keyboard_input(gameboy);
+		// debug key
+		if (IsKeyPressed(KEY_D))
+			break_hit = true;
 
 		if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
 			Vector2 mouse_pos = GetMousePosition();
@@ -207,6 +210,7 @@ int main(int argc, char* argv[]) {
 			if (break_hit) {
 				printf("\nInstr #: %u\n", gameboy->cpu->nr_instructions + 1);
 				cpu_print_info(gameboy->cpu);
+				ppu_print_info(gameboy->ppu);
 				char buf[80];
 				fgets(buf, 80, stdin);
 				if (buf[0] == 'q')
