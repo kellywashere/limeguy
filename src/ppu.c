@@ -224,7 +224,7 @@ void ppu_mcycle(struct ppu* ppu) {
 	mem_ppu_report(ppu->mem, ppu->ly, (int)ppu->mode);
 
 	// draw whole scanline during OAMSCAN (not like real hardware...)
-	if (ppu->mode == PPU_MODE_OAMSCAN && ppu->xdot >= 80 && ppu->ly != ppu->last_line_rendered) {
+	if (ppu->mode != PPU_MODE_VBLANK && ppu->xdot >= 80 && ppu->ly != ppu->last_line_rendered) {
 		// TODO: keep record of some IO vars (like LCDC) per pixel!
 		ppu_draw_scanline(ppu);
 	}
