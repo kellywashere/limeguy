@@ -9,6 +9,8 @@
 #include <raylib.h>
 
 #include "gameboy.h"
+#include "cpu.h"
+#include "ppu.h"
 #include "common.h"
 
 // ld b,b -- break (mooneye test suite) -- comment if not desired
@@ -24,6 +26,23 @@ const int winHeight = pixScale * imgHeight;
 const unsigned int fps = 60;
 const unsigned int mcycles_per_second = 1024 * 1024; // M-cycle speed: 2^22 / 4
 const unsigned int mcycles_per_frame = mcycles_per_second / fps;
+
+// Keyboard mapping RayLib --> Gameboy button
+struct keymap {
+	int            key;
+	enum gb_button button;
+};
+
+struct keymap keymaps[8] = {
+	{ KEY_RIGHT, BUT_RIGHT },
+	{ KEY_LEFT, BUT_LEFT },
+	{ KEY_UP, BUT_UP },
+	{ KEY_DOWN, BUT_DOWN },
+	{ KEY_X, BUT_A },
+	{ KEY_Z, BUT_B },
+	{ KEY_S, BUT_SELECT },
+	{ KEY_ENTER, BUT_START }
+};
 
 // palette
 struct limeguy_color rgba_palette[] = {
@@ -98,6 +117,11 @@ Texture load_dynamic_texture(int w, int h) {
 	return LoadTextureFromImage(img);
 }
 
+void get_keyboard_input(struct gameboy* gameboy) {
+	for (int ii = 0; ii < (int)(sizeof(keymaps) / sizeof(keymaps[0])); ++ii)
+		gameboy_set_button(gameboy, keymaps[ii].button, IsKeyDown(keymaps[ii].key));
+}
+
 int main(int argc, char* argv[]) {
 	FILE* logfile = NULL;
 	Texture dynamic_tex;
@@ -137,11 +161,14 @@ int main(int argc, char* argv[]) {
 		if (have_graphics)
 			done = WindowShouldClose();
 
+		// Input
+		get_keyboard_input(gameboy);
+
 		// TODO: How to define the exact "frame" loop?
 		// frame loop (run instrucutions until frame is done, or some max is exceeded)
 		bool frame_done = false;
 		cpu_reset_mcycle_frame(gameboy->cpu);
-		while (!done && !frame_done) {
+		while (!done && !frame_done) { // Frame loop
 
 			if (logfile && gameboy->cpu->nr_instructions + 1 >= start_logging_instrnr) {
 #ifdef EXTRA_LOGGING

@@ -1,13 +1,16 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "gameboy.h"
-#include "src/cpu.h"
-#include "src/mcycle.h"
-#include "src/timers.h"
+#include "cpu.h"
+#include "mcycle.h"
+#include "timers.h"
+#include "mem.h"
+#include "ppu.h"
 
 struct gameboy* gameboy_create(const char* rom_file_name) {
 	// TODO: separate ROM insertion
 	struct gameboy* gameboy = malloc(sizeof(struct gameboy));
+	gameboy->button_state = 0;
 
 	gameboy->rom = rom_create(rom_file_name);
 	if (!gameboy->rom || !gameboy->rom->data)
@@ -43,5 +46,7 @@ void gameboy_destroy(struct gameboy* gameboy) {
 	}
 }
 
-
+void gameboy_set_button(struct gameboy* gameboy, enum gb_button but, bool pressed) {
+	mem_set_button(gameboy->mem, but, pressed);
+}
 

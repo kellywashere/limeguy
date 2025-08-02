@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include "gameboy.h"
 #include "mem.h"
 
 #define VRAM          0x8000
@@ -21,6 +22,7 @@
 #define IO_SIZE   0x0080
 
 // Next defines are offsets to 0xFF00
+#define IO_P1   0x00 /* Joy pad */
 #define IO_SB   0x01 /* Serial data */
 #define IO_SC   0x02 /* Serial control */
 #define IO_DIV  0x04 /* Timer DIV */
@@ -71,6 +73,7 @@ struct io_init {
 struct mem* mem_create() {
 	// reverve one piece of mem for all (avoid many mallocs)
 	struct mem* mem = malloc(sizeof(struct mem) + RAM_RESERVED/* + TILEDATA_RESERVED */);
+
 	mem->rom = NULL;
 	mem->ram = (u8*)((void*)mem + sizeof(struct mem)); // ram follows struct directly
 	//mem->tiles = (u8*)((void*)mem->ram + RAM_RESERVED); // for "pre-decoded" tiles
@@ -91,6 +94,7 @@ struct mem* mem_create() {
 	mem->dma_active = false;
 
 	mem->div_was_reset = false;
+	mem->button_state = 0;
 
 	return mem;
 }
@@ -125,14 +129,21 @@ u8 mem_read(struct mem* mem, u16 addr) {
 	}
 	else if (addr >= IO_START && addr < (IO_START + IO_SIZE)) { // IO operation
 		u8 io_idx = addr & 0xFF;
-	
 		// FIXME: this is a hack to pass gb doctor
 		//if (io_idx == IO_LY) return 0x90;
-
-		if (io_idx == IO_IF) // pass mooneye if_ie_registers.gb
-			return mem->io[io_idx] | 0xE0; // MSBits always read as high
-
-		return mem->io[io_idx]; // TODO
+		switch (io_idx) {
+			case IO_P1: { // read out button presses
+				bool selbut  = ((mem->io[io_idx] >> 5) & 1) == 0;
+				bool seldpad = ((mem->io[io_idx] >> 4) & 1) == 0;
+				u8 lownib = seldpad ? (mem->button_state & 0xF) : 0;
+				u8 hinib = selbut ? (mem->button_state >> 4) : 0;
+				return ((~(lownib | hinib)) & 0xF) | (mem->io[io_idx] & 0xF0);
+			}
+			case IO_IF: // pass mooneye if_ie_registers.gb
+				return mem->io[io_idx] | 0xE0; // MSBits always read as high
+			default:
+				return mem->io[io_idx];
+		}
 	}
 	else if (addr == INTERRUPT_ENABLE)
 		return mem->ie;
@@ -166,6 +177,10 @@ void mem_write(struct mem* mem, u16 addr, u8 value) {
 	else if (addr >= IO_START && addr < (IO_START + IO_SIZE)) { // IO operation
 		u8 io_idx = addr & 0xFF;
 		switch (io_idx) {
+			case IO_P1:
+				mem->io[io_idx] = value & 0xF0; // low nibble is read-only
+				// TODO: INTERRUPT?!
+				break;
 			case IO_DMA:
 				mem->dma_requested = true;
 				mem->dma_request_addres = value << 8;
@@ -345,3 +360,10 @@ void mem_ppu_get_bg_palette(struct mem* mem, gb_color palette[4]) {
 		bgp >>= 2;
 	}
 }
+
+void mem_set_button(struct mem* mem, enum gb_button but, bool pressed) {
+	mem->button_state &= (~(1 << but));
+	mem->button_state |= pressed ? (1 << but) : 0;
+	// TODO: Interrupt?!
+}
+

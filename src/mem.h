@@ -4,25 +4,28 @@
 #include <stdbool.h>
 #include "common.h"
 #include "rom.h"
+#include "gameboy.h"
 
 // mem takes care of memory mapping
 
 struct mem {
-	struct rom* rom;
-	u8*         ram;
-	u8          oam[0xA0];
-	u8          io[0x80];
-	u8          hiram[0x7F];
-	u8          ie; // IE interrupt enbl flags. Note: IF is at io[0x0F]
+	struct rom*     rom;
+	u8*             ram;
+	u8              oam[0xA0];
+	u8              io[0x80];
+	u8              hiram[0x7F];
+	u8              ie; // IE interrupt enbl flags. Note: IF is at io[0x0F]
 
 	// DMA state
-	bool dma_requested; // set when writing to 0xFF46
-	bool dma_next_cycle; // hand-over bool to delay by one cycle
-	u16         dma_request_addres;
-	bool        dma_active;
-	u16         dma_addr;
+	bool            dma_requested; // set when writing to 0xFF46
+	bool            dma_next_cycle; // hand-over bool to delay by one cycle
+	u16             dma_request_addres;
+	bool            dma_active;
+	u16             dma_addr;
 
-	bool        div_was_reset; // To allow syncing DIV timer to a write op
+	bool            div_was_reset; // To allow syncing DIV timer to a write op
+
+	u8              button_state; // keeping copy of this simplifies interrupt gen, e.g.
 
 	//gb_color*   tiles; // For pre-decoded tiles
 };
@@ -60,5 +63,9 @@ u8 mem_ppu_get_lcdc(struct mem* mem);
 int mem_ppu_get_tileidx_from_tilemap(struct mem* mem, int tm_idx);
 void mem_ppu_copy_tile_row(struct mem* mem, gb_color_idx* dest, int tile_idx_eff, int tile_row);
 void mem_ppu_get_bg_palette(struct mem* mem, gb_color palette[4]);
+
+// Buttons (kept in mem because of interrupt handling)
+void mem_set_button(struct mem* mem, enum gb_button but, bool pressed);
+
 
 #endif

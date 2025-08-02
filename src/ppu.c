@@ -1,5 +1,8 @@
 // Interesting links:
 // https://jsgroth.dev/blog/posts/gb-rewrite-pixel-fifo/
+
+// BUG: There is one scan line missing in fairylake.gb
+
 #include <stdlib.h>
 #include "ppu.h"
 #include "mem.h"
@@ -82,7 +85,7 @@ void ppu_draw_scanline(struct ppu* ppu) {
 	for (int x = 0; x < LCD_WIDTH; ++x) {
 		int x_bg = (x + scx) & 0xFF;
 		bool is_win = win_enbl && x + 7 >= wx;
-		gb_color_idx pix_col_idx = is_win ? full_line_win[x] : full_line_bg[x_bg];
+		gb_color_idx pix_col_idx = is_win ? full_line_win[x + 7 - wx] : full_line_bg[x_bg];
 		ppu->lcd[screen_offset + x] = bg_palette[pix_col_idx];
 	}
 
