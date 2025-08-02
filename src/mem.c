@@ -38,6 +38,8 @@
 #define IO_LYC  0x45 /* LY cmp */
 #define IO_DMA  0x46 /* OAM DMA */
 #define IO_BGP  0x47 /* BG Palette */
+#define IO_OBP0 0x48 /* Obj Palette 0 */
+#define IO_OBP1 0x49 /* Obj Palette 1 */
 #define IO_WY   0x4A /* Window Y pos */
 #define IO_WX   0x4B /* Window X pos + 7 */
 
@@ -342,7 +344,7 @@ int mem_ppu_get_tileidx_from_tilemap(struct mem* mem, int tm_idx) {
 // Update tile when VRAM tile data changes.
 // Copy from there directly.
 // TODO: Have start and end pixel nr as param? So we can copy subset of 8 pixel row?
-void mem_ppu_copy_tile_row(struct mem* mem, gb_color_idx* dest, int tile_idx_eff, int tile_row) {
+void mem_ppu_copy_tile_row(struct mem* mem, gb_color_idx* dest, int tile_idx_eff, int tile_row, bool fliplr) {
 	// tile_idx_eff: 0 .. 383 (LCDC.5 already processed)
 	// tile_row: 0 .. 7
 	u16 vram_addr = tile_idx_eff * 16 + tile_row * 2;
@@ -350,7 +352,8 @@ void mem_ppu_copy_tile_row(struct mem* mem, gb_color_idx* dest, int tile_idx_eff
 	u8 row_msb = mem->ram[vram_addr + 1];
 	for (int b = 0; b < 8; ++b) {
 		gb_color_idx col_idx = ((row_msb & 1) << 1) | (row_lsb & 1);
-		dest[7 - b] = col_idx;
+		int dest_idx = fliplr ? b : 7 - b;
+		dest[dest_idx] = col_idx;
 		row_msb >>= 1;
 		row_lsb >>= 1;
 	}
@@ -362,6 +365,28 @@ void mem_ppu_get_bg_palette(struct mem* mem, gb_color palette[4]) {
 		palette[ii] = bgp & 0x3;
 		bgp >>= 2;
 	}
+}
+
+void mem_ppu_get_obj_palettes(struct mem* mem, gb_color palettes[2 * 4]) {
+	int obp = mem->io[IO_OBP0];
+	for (int ii = 0; ii < 4; ++ii) {
+		palettes[ii] = obp & 0x3;
+		obp >>= 2;
+	}
+	obp = mem->io[IO_OBP1];
+	for (int ii = 4; ii < 8; ++ii) {
+		palettes[ii] = obp & 0x3;
+		obp >>= 2;
+	}
+}
+
+void mem_ppu_get_obj_attribs(struct mem* mem, struct obj_attributes* oa, int oam_idx) {
+	int offs = 4 * oam_idx;
+	oa->y = mem->oam[offs++];
+	oa->x = mem->oam[offs++];
+	oa->tile_idx = mem->oam[offs++];
+	oa->flags = mem->oam[offs];
+	oa->idx_in_oam = oam_idx;
 }
 
 void mem_set_button(struct mem* mem, enum gb_button but, bool pressed) {

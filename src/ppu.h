@@ -40,6 +40,15 @@ struct ppu {
 	unsigned int nr_frames;
 };
 
+struct obj_attributes {
+	u8 y;
+	u8 x;
+	u8 tile_idx;
+	u8 flags; // see: https://gbdev.io/pandocs/OAM.html
+
+	u8 idx_in_oam; // for sorting when x's are equal
+};
+
 struct ppu* ppu_create(struct mem* mem);
 void ppu_destroy(struct ppu* ppu);
 

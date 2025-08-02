@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "common.h"
 #include "rom.h"
+#include "ppu.h"
 #include "gameboy.h"
 
 // mem takes care of memory mapping
@@ -61,8 +62,10 @@ void mem_ppu_get_scroll(struct mem* mem, u8* scx, u8* scy);
 void mem_ppu_get_wxwy(struct mem* mem, u8* wx, u8* wy);
 u8 mem_ppu_get_lcdc(struct mem* mem);
 int mem_ppu_get_tileidx_from_tilemap(struct mem* mem, int tm_idx);
-void mem_ppu_copy_tile_row(struct mem* mem, gb_color_idx* dest, int tile_idx_eff, int tile_row);
+void mem_ppu_copy_tile_row(struct mem* mem, gb_color_idx* dest, int tile_idx_eff, int tile_row, bool fliplr);
 void mem_ppu_get_bg_palette(struct mem* mem, gb_color palette[4]);
+void mem_ppu_get_obj_palettes(struct mem* mem, gb_color palettes[2 * 4]);
+void mem_ppu_get_obj_attribs(struct mem* mem, struct obj_attributes* oa, int oam_idx);
 
 // Buttons (kept in mem because of interrupt handling)
 void mem_set_button(struct mem* mem, enum gb_button but, bool pressed);

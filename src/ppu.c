@@ -1,8 +1,6 @@
 // Interesting links:
 // https://jsgroth.dev/blog/posts/gb-rewrite-pixel-fifo/
 
-// BUG: There is one scan line missing in fairylake.gb
-
 #include <stdlib.h>
 #include "ppu.h"
 #include "mem.h"
@@ -48,49 +46,135 @@ void ppu_draw_full_line_of_tilemap(gb_color_idx full_line[], int y, struct mem* 
 		int tile_idx_eff = addrmode8000 ?  // oonverted to 0..383
 		                   tile_idx :
 		                   256 + (tile_idx & 0x7F) - (tile_idx & 0x80);
-		mem_ppu_copy_tile_row(mem, &full_line[tilex * 8], tile_idx_eff, tile_y);
+		mem_ppu_copy_tile_row(mem, &full_line[tilex * 8], tile_idx_eff, tile_y, false);
+	}
+}
+
+
+static
+int cmp_obj_xpos_rev(const void* a, const void* b) {
+	struct obj_attributes* oa_a = (struct obj_attributes*)a;
+	struct obj_attributes* oa_b = (struct obj_attributes*)b;
+	return (oa_a->x != oa_b->x) ? oa_b->x - oa_a->x : oa_b->idx_in_oam - oa_a->idx_in_oam;
+}
+
+static
+void ppu_draw_obj_line(gb_color_idx obj_line[], u8 obj_flags[], int y, struct mem* mem, int obj_height) {
+	int nr_objs = 0; // nr of objects on this line
+	struct obj_attributes obj_attribs[10]; // we can draw 10 objs on one line
+	gb_color_idx obj_tile_line[8];  // temporary space for tile line
+
+	int y16 = y + 16; // we have 16 px margin on top, for hiding parts of objs
+
+	// step 0: clear obj line
+	for (int ii = 0; ii < LCD_WIDTH; ++ii)
+		obj_line[ii] = 0; // transparent
+
+	// Step 1: get first 10 objects that have y-pos on this line
+	for (int ii = 0; ii < 40 && nr_objs < 10; ++ii) {
+		mem_ppu_get_obj_attribs(mem, &obj_attribs[nr_objs], ii);
+		// on this line?
+		if (obj_attribs[nr_objs].y <= y16 && y16 < obj_attribs[nr_objs].y + obj_height) {
+			// it's a keeper
+			if (obj_height == 16)
+				obj_attribs[nr_objs].idx_in_oam &= 0xFE; // correct idx when using tile height 16
+			++nr_objs;
+		}
+	}
+
+	// Step 2: draw objects, from highest x-coord down (so lowest x-pos overdraws previous one,
+	// for correct drawing priority). We save objects prio bit in prio array
+	// Step 2a: sort, descending x pos
+	qsort(obj_attribs, nr_objs, sizeof(struct obj_attributes), cmp_obj_xpos_rev);
+	// Step 2b: draw each obj on obj_line, saving flags when drawing a pixel
+	for (int ii = 0; ii < nr_objs; ++ii) {
+		u8 flags = obj_attribs[ii].flags;
+		// get the tile row
+		bool fliplr = ((flags >> 5) & 1) == 1;
+		bool flipud = ((flags >> 6) & 1) == 1;
+		int y_in_tile = flipud ? obj_height - 1 - (y16 - obj_attribs[ii].y) : y16 - obj_attribs[ii].y;
+		int tile_idx = obj_attribs[ii].tile_idx;
+		if (y_in_tile >= 8) {
+			y_in_tile -= 8;
+			++tile_idx;
+		}
+		mem_ppu_copy_tile_row(mem, obj_tile_line, tile_idx, y_in_tile, fliplr);
+		// copy to obj line
+		for (int x = 0; x < 8; ++x) {
+			u8 xtot = obj_attribs[ii].x + x;
+			if (xtot < 8 || xtot >= (LCD_WIDTH + 8) || obj_tile_line[x] == 0) continue; // not visible
+			xtot -= 8;
+			obj_line[xtot] = obj_tile_line[x];
+			obj_flags[xtot] = obj_attribs[ii].flags;
+		}
 	}
 }
 
 static
 void ppu_draw_scanline(struct ppu* ppu) {
 	u8 scx, scy, wx, lcdc;
+	// TODO: Merge into single scanline for speed (low prio for now)
+	gb_color_idx bg_line[32 * 8];
+	gb_color_idx win_line[32 * 8]; // TODO: 21 tiles is enough
+	// obj line, and corresponding flags
+	gb_color_idx obj_line[LCD_WIDTH];
+	u8           obj_flags[LCD_WIDTH];
+
+	// get positions of backround and window
 	mem_ppu_get_scroll(ppu->mem, &scx, &scy);
 	mem_ppu_get_wxwy(ppu->mem, &wx, NULL); // we don't need wy, handled by wy_condition
+
+	// extract data from LCDC
 	lcdc = mem_ppu_get_lcdc(ppu->mem);
+	bool addrmode8000 = ((lcdc >> 4) & 1) == 1; // tile data addressing mode bg/win
 	int bg_tile_map = (lcdc >> 3) & 1;  // tile map 0 or 1
 	int win_tile_map = (lcdc >> 6) & 1; // tile map 0 or 1
+	int obj_height = 8 + ((lcdc >> 2) & 1) * 8;
+	bool obj_enbl = (lcdc >> 1) & 1;
 	bool bg_enbl = (lcdc >> 0) & 1;
 	// win_enbl: is window visible in this scanline?
 	bool win_enbl = bg_enbl && ppu->wy_condition && wx <= 166 && ((lcdc >> 5) & 1) == 1;
-	bool addrmode8000 = ((lcdc >> 4) & 1) == 1; // tile data addressing mode
 
-	// TODO: Merge into single scanline for speed (low prio for now)
-	gb_color_idx full_line_bg[32 * 8];
-	gb_color_idx full_line_win[32 * 8];
-
-	// BACKGROUND
+	// Background and window
 	if (bg_enbl) {
 		int y_eff = (ppu->ly + scy) & 0xFF;
-		ppu_draw_full_line_of_tilemap(full_line_bg, y_eff, ppu->mem, bg_tile_map, addrmode8000);
+		ppu_draw_full_line_of_tilemap(bg_line, y_eff, ppu->mem, bg_tile_map, addrmode8000);
 	}
 	if (win_enbl) {
-		ppu_draw_full_line_of_tilemap(full_line_win, ppu->wy_counter, ppu->mem, win_tile_map, addrmode8000);
-		//printf("Win: %d, LY: %d\n", ppu->wy_counter, ppu->ly);
+		// TODO: no need to get entire 32 tile line, max is 7px + 160px, so 21 tiles is enough
+		ppu_draw_full_line_of_tilemap(win_line, ppu->wy_counter, ppu->mem, win_tile_map, addrmode8000);
 		++ppu->wy_counter;
+	}
+
+	// Draw objects
+	if (obj_enbl) {
+		ppu_draw_obj_line(obj_line, obj_flags, ppu->ly, ppu->mem, obj_height);
 	}
 
 	// Get palette into LUT array
 	gb_color bg_palette[4];
+	gb_color obj_palettes[2 * 4];
 	mem_ppu_get_bg_palette(ppu->mem, bg_palette);
+	mem_ppu_get_obj_palettes(ppu->mem, obj_palettes);
 
-	// Copy to lcd screen bitmap, after applying palette
+	// Multiplex to lcd screen bitmap, and apply palette
 	int screen_offset = ppu->ly * LCD_WIDTH;
 	for (int x = 0; x < LCD_WIDTH; ++x) {
 		int x_bg = (x + scx) & 0xFF;
 		bool is_win = win_enbl && x + 7 >= wx;
-		gb_color_idx pix_col_idx = is_win ? full_line_win[x + 7 - wx] : full_line_bg[x_bg];
-		ppu->lcd[screen_offset + x] = bg_palette[pix_col_idx];
+		gb_color_idx bgwin_col_idx = is_win ? win_line[x + 7 - wx] : bg_line[x_bg];
+		// BG/WIN vs OBJ
+		if (obj_line[x] == 0) // No obj here, draw bg/win
+			ppu->lcd[screen_offset + x] = bg_palette[bgwin_col_idx];
+		else { // there is obj pixel here
+			bool prio = ((obj_flags[x] >> 7) & 1) == 1;
+			if (prio && bgwin_col_idx != 0) // draw bg/win over obj instead
+				ppu->lcd[screen_offset + x] = bg_palette[bgwin_col_idx];
+			else { // draw obj pixel
+				int palette_nr = (obj_flags[x] >> 4) & 1;
+				ppu->lcd[screen_offset + x] = obj_palettes[palette_nr * 4 + obj_line[x]];
+			}
+		}
 	}
 
 	ppu->last_line_rendered = ppu->ly;
