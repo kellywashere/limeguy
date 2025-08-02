@@ -19,7 +19,7 @@
 // window size
 const int imgWidth  = 160;
 const int imgHeight = 144;
-const int pixScale  = 4;
+const int pixScale  = 6;
 const int winWidth  = pixScale * imgWidth;
 const int winHeight = pixScale * imgHeight;
 
@@ -117,9 +117,23 @@ Texture load_dynamic_texture(int w, int h) {
 	return LoadTextureFromImage(img);
 }
 
+static
 void get_keyboard_input(struct gameboy* gameboy) {
 	for (int ii = 0; ii < (int)(sizeof(keymaps) / sizeof(keymaps[0])); ++ii)
 		gameboy_set_button(gameboy, keymaps[ii].button, IsKeyDown(keymaps[ii].key));
+}
+
+static
+void write_log_line(struct gameboy* gameboy, FILE* logfile) {
+#ifdef EXTRA_LOGGING
+		fprintf(logfile, "%8u ", gameboy->cpu->nr_instructions + 1);
+		if (gameboy->ppu)
+			fprintf(logfile, "%d,%d ", gameboy->ppu->xdot, gameboy->ppu->ly);
+		// if (gameboy->timers)
+		// 	fprintf(logfile, "%d,%d ", gameboy->timers->count_div, gameboy->mem->io[0x04]);
+		//fprintf(logfile, "%d ", gameboy->timers->count_div);
+#endif
+		cpu_print_state_gbdoctor(gameboy->cpu, logfile);
 }
 
 int main(int argc, char* argv[]) {
@@ -164,23 +178,20 @@ int main(int argc, char* argv[]) {
 		// Input
 		get_keyboard_input(gameboy);
 
+		if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+			Vector2 mouse_pos = GetMousePosition();
+			printf("x,y = %d, %d\n", (int)mouse_pos.x / pixScale, (int)mouse_pos.y / pixScale);
+		}
+
 		// TODO: How to define the exact "frame" loop?
 		// frame loop (run instrucutions until frame is done, or some max is exceeded)
 		bool frame_done = false;
 		cpu_reset_mcycle_frame(gameboy->cpu);
 		while (!done && !frame_done) { // Frame loop
+			// TODO: clean-up!! Especially interactive breakpoint code
 
-			if (logfile && gameboy->cpu->nr_instructions + 1 >= start_logging_instrnr) {
-#ifdef EXTRA_LOGGING
-				fprintf(logfile, "%8u ", gameboy->cpu->nr_instructions + 1);
-				if (gameboy->ppu)
-					fprintf(logfile, "%d,%d ", gameboy->ppu->xdot, gameboy->ppu->ly);
-				// if (gameboy->timers)
-				// 	fprintf(logfile, "%d,%d ", gameboy->timers->count_div, gameboy->mem->io[0x04]);
-				//fprintf(logfile, "%d ", gameboy->timers->count_div);
-#endif
-				cpu_print_state_gbdoctor(gameboy->cpu, logfile);
-			}
+			if (logfile && gameboy->cpu->nr_instructions + 1 >= start_logging_instrnr)
+				write_log_line(gameboy, logfile);
 
 			// break point conditions
 			if (break_instrnr > 0 && gameboy->cpu->nr_instructions + 1 == break_instrnr)

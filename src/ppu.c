@@ -7,6 +7,9 @@
 #include "ppu.h"
 #include "mem.h"
 
+//DEBUG
+#include <stdio.h>
+
 #define XDOT_MAX     456
 #define LY_MAX       154
 #define XDOT_OAMSCAN 80
@@ -73,6 +76,7 @@ void ppu_draw_scanline(struct ppu* ppu) {
 	}
 	if (win_enbl) {
 		ppu_draw_full_line_of_tilemap(full_line_win, ppu->wy_counter, ppu->mem, win_tile_map, addrmode8000);
+		//printf("Win: %d, LY: %d\n", ppu->wy_counter, ppu->ly);
 		++ppu->wy_counter;
 	}
 
@@ -137,8 +141,9 @@ void ppu_mcycle(struct ppu* ppu) {
 	mem_ppu_report(ppu->mem, ppu->ly, (int)ppu->mode);
 
 	// draw whole scanline during OAMSCAN (not like real hardware...)
-	if (ppu->mode == PPU_MODE_OAMSCAN && ppu->xdot >= 40 && ppu->ly != ppu->last_line_rendered) {
-		// "40" is arbitrary, just not right at beginning to allow interrupt to be called first
+	if (ppu->mode == PPU_MODE_OAMSCAN && ppu->xdot >= 76 && ppu->ly != ppu->last_line_rendered) {
+		// "76" is at end of OAM, giving as much time as possbile for interrupt to be processed
+		// TODO: keep record of some IO vars (like LCDC) per pixel!
 		ppu_draw_scanline(ppu);
 	}
 }

@@ -178,7 +178,8 @@ void mem_write(struct mem* mem, u16 addr, u8 value) {
 		u8 io_idx = addr & 0xFF;
 		switch (io_idx) {
 			case IO_P1:
-				mem->io[io_idx] = value & 0xF0; // low nibble is read-only
+ 	 	 	 	// low nibble is read-only
+				mem->io[io_idx] = (mem->io[io_idx] & 0x0F) | (value & 0xF0);
 				// TODO: INTERRUPT?!
 				break;
 			case IO_DMA:
@@ -186,7 +187,9 @@ void mem_write(struct mem* mem, u16 addr, u8 value) {
 				mem->dma_request_addres = value << 8;
 				break;
 			case IO_STAT:
-				mem->io[io_idx] = value & 0xF8; // 3 lsb are read only
+ 	 	 	 	// TODO: Tell PPU aobut this. PPU then keeps per-pixel record of stat!!
+ 	 	 	 	// 3 lsb are read only
+				mem->io[io_idx] = (mem->io[io_idx] & 0x07) | (value & 0xF8);
 				break;
 			case IO_SC: // Serial out
 				if (value == 0x81) {
