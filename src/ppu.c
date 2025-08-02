@@ -131,23 +131,21 @@ void ppu_draw_scanline(struct ppu* ppu) {
 	int win_tile_map = (lcdc >> 6) & 1; // tile map 0 or 1
 	int obj_height = 8 + ((lcdc >> 2) & 1) * 8;
 	bool obj_enbl = (lcdc >> 1) & 1;
-	bool bg_enbl = (lcdc >> 0) & 1;
+	bool bgwin_enbl = (lcdc >> 0) & 1;
 	// win_enbl: is window visible in this scanline?
-	bool win_enbl = bg_enbl && ppu->wy_condition && wx <= 166 && ((lcdc >> 5) & 1) == 1;
+	bool win_enbl = bgwin_enbl && ppu->wy_condition && wx <= 166 && ((lcdc >> 5) & 1) == 1;
 
 	// Background and window
-	if (bg_enbl) {
+	if (bgwin_enbl) { // background
 		int y_eff = (ppu->ly + scy) & 0xFF;
 		ppu_draw_full_line_of_tilemap(bg_line, y_eff, ppu->mem, bg_tile_map, addrmode8000);
 	}
-	if (win_enbl) {
+	if (win_enbl) { // window
 		// TODO: no need to get entire 32 tile line, max is 7px + 160px, so 21 tiles is enough
 		ppu_draw_full_line_of_tilemap(win_line, ppu->wy_counter, ppu->mem, win_tile_map, addrmode8000);
 		++ppu->wy_counter;
 	}
-
-	// Draw objects
-	if (obj_enbl) {
+	if (obj_enbl) { // objects
 		ppu_draw_obj_line(obj_line, obj_flags, ppu->ly, ppu->mem, obj_height);
 	}
 
@@ -162,14 +160,15 @@ void ppu_draw_scanline(struct ppu* ppu) {
 	for (int x = 0; x < LCD_WIDTH; ++x) {
 		int x_bg = (x + scx) & 0xFF;
 		bool is_win = win_enbl && x + 7 >= wx;
-		gb_color_idx bgwin_col_idx = is_win ? win_line[x + 7 - wx] : bg_line[x_bg];
+		gb_color_idx bgwin_col_idx = bgwin_enbl ? (is_win ? win_line[x + 7 - wx] : bg_line[x_bg]) : 0;
+		gb_color bgwin_col = bgwin_enbl ? bg_palette[bgwin_col_idx] : 0; // WHITE when !bgwin_enbl
 		// BG/WIN vs OBJ
-		if (obj_line[x] == 0) // No obj here, draw bg/win
-			ppu->lcd[screen_offset + x] = bg_palette[bgwin_col_idx];
+		if (!obj_enbl || obj_line[x] == 0) // No obj here, draw bg/win
+			ppu->lcd[screen_offset + x] = bgwin_col;
 		else { // there is obj pixel here
 			bool prio = ((obj_flags[x] >> 7) & 1) == 1;
 			if (prio && bgwin_col_idx != 0) // draw bg/win over obj instead
-				ppu->lcd[screen_offset + x] = bg_palette[bgwin_col_idx];
+				ppu->lcd[screen_offset + x] = bgwin_col;
 			else { // draw obj pixel
 				int palette_nr = (obj_flags[x] >> 4) & 1;
 				ppu->lcd[screen_offset + x] = obj_palettes[palette_nr * 4 + obj_line[x]];
